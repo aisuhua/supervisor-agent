@@ -1,0 +1,3 @@
+<?php
+
+$GLOBALS['name'] = 'suhua';
