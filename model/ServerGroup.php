@@ -1,4 +1,6 @@
 <?php
+namespace SupAgent\Model;
+
 use Phalcon\Mvc\Model;
 
 class ServerGroup extends Model

@@ -4,6 +4,7 @@ use Phalcon\Di\FactoryDefault;
 use Phalcon\Db\Adapter\Pdo\Mysql;
 use Phalcon\Mvc\View;
 use Phalcon\Mvc\View\Engine\Volt as VoltEngine;
+use Phalcon\Mvc\Dispatcher;
 
 error_reporting(-1);
 
@@ -19,6 +20,7 @@ define('PATH_CONFIG', PATH_ROOT . '/config');
 define('PATH_CONFIG_COMMON', PATH_CONFIG . '/common');
 define('PATH_CACHE', PATH_ROOT . '/cache');
 define('PATH_LOG', PATH_ROOT . '/log');
+define('PATH_LIBRARY', PATH_ROOT . '/library');
 
 // 判断当前机房
 if (is_file("/www/web/IDC_HN1"))
@@ -52,18 +54,28 @@ require PATH_CONFIG_COMMON . '/inc_language.php';
 // 加载环境配置
 require PATH_CONFIG_IDC . '/inc_database.php';
 
+// 加载库文件
+require PATH_LIBRARY . '/lib_func.php';
+
 // 注册自动加载目录
 $loader = new Loader();
-$loader->registerDirs(
+$loader->registerNamespaces(
     [
-        PATH_ROOT . '/controller/',
-        PATH_ROOT . '/model/',
+        'SupAgent\Controller' => PATH_ROOT . '/controller/',
+        'SupAgent\Model' => PATH_ROOT . '/model/',
+        'SupAgent\Library' => PATH_ROOT . '/library/',
     ]
 );
 $loader->register();
 
 // 注册服务
 $di = new FactoryDefault();
+
+$di->set('dispatcher', function () {
+    $dispatcher = new Dispatcher();
+    $dispatcher->setDefaultNamespace('SupAgent\Controller\\');
+    return $dispatcher;
+});
 
 $di->set('db', function () {
     return new Mysql([
