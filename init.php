@@ -63,6 +63,7 @@ $loader->registerNamespaces([
 $loader->register();
 
 // 根据当前运行模式实例化对应的 DI 容器
+/** @var Phalcon\Di $di */
 if (PHP_SAPI == 'cli')
 {
     $di = new CliDI();
