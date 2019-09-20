@@ -7,6 +7,6 @@ class CronTask extends Task
 {
    public function checkPerMinuteAction()
    {
-        echo 'suhua';
+        echo 'suhua', PHP_EOL;
    }
 }

@@ -7,4 +7,4 @@ if ($uri !== '/' && file_exists(__DIR__ . '/public' . $uri)) {
 
 $_GET['_url'] = $uri;
 
-require __DIR__ . '/public/micro.php';
+require __DIR__ . '/public/index.php';
