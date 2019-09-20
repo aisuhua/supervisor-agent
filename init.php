@@ -19,6 +19,7 @@ define('PATH_CONFIG_COMMON', PATH_CONFIG . '/common');
 define('PATH_CACHE', PATH_ROOT . '/cache');
 define('PATH_LOG', PATH_ROOT . '/log');
 define('PATH_LIBRARY', PATH_ROOT . '/library');
+define('PATH_SUPERVISOR_CONFIG', PATH_ROOT . '/supervisor.d');
 
 if (DEBUG_MODE)
 {
@@ -54,11 +55,14 @@ require PATH_CONFIG_IDC . '/inc_database.php';
 // 加载库文件
 require PATH_LIBRARY . '/lib_func.php';
 
+// 加载 composer 第三方库
+require PATH_ROOT . '/vendor/autoload.php';
+
 // 注册默认自动加载的目录
 $loader = new Loader();
 $loader->registerNamespaces([
     'SupAgent\Model' => PATH_ROOT . '/model/',
-    'SupAgent\Library' => PATH_ROOT . '/library/',
+    'SupAgent' => PATH_ROOT . '/library/',
 ]);
 $loader->register();
 

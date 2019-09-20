@@ -2,50 +2,40 @@
 /**
  * @var Phalcon\Di $di
  */
-use Phalcon\Mvc\Application;
-use Phalcon\Mvc\Dispatcher;
-use Phalcon\Mvc\View;
-use Phalcon\Mvc\View\Engine\Volt as VoltEngine;
+use Phalcon\Mvc\Micro;
 
 require __DIR__ . '/../init.php';
-require PATH_INIT . '/routes.php';
 
-// 注冊自动加载目录
-$loader->registerNamespaces([
-    'SupAgent\Controller' => PATH_ROOT . '/controller/',
+$app = new Micro($di);
 
-], true);
-$loader->register();
+/**
+ * 重新生成进程配置
+ * 1. 读取进程信息，将进程配置拼接成 ini，写入 process.conf 文件
+ * 2. 调动 Supervisor reloadConfig 方法，更新进程状态
+ * 3. 返回 added/changed/removed
+ */
+$app->get('/process/reload/{server_id}', function ($server_id) {
 
-// 注册服务
-$di->set('dispatcher', function () {
-    $dispatcher = new Dispatcher();
-    $dispatcher->setDefaultNamespace('SupAgent\Controller\\');
-    return $dispatcher;
 });
 
-$di->setShared('view', function () {
-    $view = new View();
-    $view->setDI($this);
-    $view->setViewsDir(PATH_ROOT . '/view/');
+/**
+ * 重新生成命令配置
+ * 1. 读取命令信息，将命令进程拼接成 ini，写入 command.conf 文件
+ * 2. 调用 Supervisor reloadConfig 方法，更新进程状态
+ * 3. 返回 added/changed/removed
+ */
+$app->get('/command/reload/{server_id}', function($server_id) {
 
-    $view->registerEngines([
-        '.volt' => function ($view) {
-            $volt = new VoltEngine($view, $this);
-
-            $volt->setOptions([
-                'compiledPath' => PATH_CACHE . '/volt/',
-                'compileAlways' => DEBUG_MODE ? true : false
-            ]);
-
-            return $volt;
-        }
-    ]);
-
-    return $view;
 });
 
-$application = new Application($di);
-echo $application->handle()->getContent();
+/**
+ * 处理 event listener 回调的事件
+ * 1. 根据进程信息判断属于定时任务或者命令
+ * 2. 根据进程当前状态执行更新操作，包括从配置文件删除进程所对应的配置项
+ * 3. 更新定时任务或命令的记录状态并记录日志
+ */
+$app->get('/event-handle', function($server_id) {
 
+});
 
+$app->handle();

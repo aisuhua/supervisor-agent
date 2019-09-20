@@ -1,0 +1,7 @@
+{
+    "require": {
+        "dragonmantank/cron-expression": "^2.3",
+        "yzalis/supervisor": "^1.1",
+        "mtdowling/supervisor-event": "dev-master"
+    }
+}

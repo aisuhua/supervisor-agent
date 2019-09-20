@@ -23,3 +23,23 @@ function size_format($bytes, $length = 2, $max_unit = '')
 
     return round($bytes, $length) . $extension;
 }
+
+function print_cli(...$args)
+{
+    echo date('Y-m-d H:i:s'), ">> " . implode('', $args), PHP_EOL;
+}
+
+function build_ini_string(array $parsed)
+{
+    $ini = '';
+    foreach ($parsed as $key => $item)
+    {
+        $ini .= '[' . $key . ']' . PHP_EOL;
+        foreach ($item as $k => $v)
+        {
+            $ini .= $k . '=' . $v . PHP_EOL;
+        }
+    }
+
+    return $ini;
+}
