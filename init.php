@@ -13,13 +13,14 @@ define('DEBUG_MODE', true);
 
 // 定义项目常量
 define('PATH_ROOT', __DIR__);
-define('PATH_INIT', PATH_ROOT . '/init');
-define('PATH_CONFIG', PATH_ROOT . '/config');
+define('PATH_APP', PATH_ROOT . '/app');
+define('PATH_INIT', PATH_APP . '/init.d');
+define('PATH_CONFIG', PATH_APP . '/config');
 define('PATH_CONFIG_COMMON', PATH_CONFIG . '/common');
-define('PATH_CACHE', PATH_ROOT . '/cache');
-define('PATH_LOG', PATH_ROOT . '/log');
-define('PATH_LIBRARY', PATH_ROOT . '/library');
-define('PATH_SUPERVISOR_CONFIG', PATH_ROOT . '/supervisor.d');
+define('PATH_CACHE', PATH_APP . '/cache');
+define('PATH_LOG', PATH_APP . '/log');
+define('PATH_LIBRARY', PATH_APP . '/library');
+define('PATH_SUPERVISOR', PATH_ROOT . '/supervisor');
 
 if (DEBUG_MODE)
 {
@@ -61,8 +62,8 @@ require PATH_ROOT . '/vendor/autoload.php';
 // 注册默认自动加载的目录
 $loader = new Loader();
 $loader->registerNamespaces([
-    'SupAgent\Model' => PATH_ROOT . '/model/',
-    'SupAgent' => PATH_ROOT . '/library/',
+    'SupAgent\Model' => PATH_APP . '/model/',
+    'SupAgent' => PATH_APP . '/library/',
 ]);
 $loader->register();
 

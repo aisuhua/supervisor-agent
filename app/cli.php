@@ -5,12 +5,12 @@
 use Phalcon\Cli\Console;
 use Phalcon\Cli\Dispatcher;
 
-require __DIR__ . '/init.php';
+require __DIR__ . '/../init.php';
 require PATH_INIT . '/cli-routes.php';
 
 // 注冊自动加载目录
 $loader->registerNamespaces([
-    'SupAgent\Task' => PATH_ROOT . '/task/',
+    'SupAgent\Task' => PATH_APP . '/task/',
 
 ], true);
 $loader->register();

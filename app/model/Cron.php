@@ -29,7 +29,7 @@ class Cron extends Model
     {
         $this->keepSnapshots(true);
 
-        $this->belongsTo('server_id', 'Server', 'id', [
+        $this->belongsTo('server_id', Server::class, 'id', [
             'alias' => 'server',
             'reusable' => false
         ]);
@@ -43,6 +43,17 @@ class Cron extends Model
      */
     public function getProgram($datetime)
     {
-        return 'sys_cron_' . $this->id . '_' . $datetime;
+        return '_supervisor_cron_' . $this->id . '_' . $datetime;
     }
+
+    public static function isCron($program)
+    {
+        return strpos($program, '_supervisor_cron_') === 0;
+    }
+
+    public static function parseProgram($program)
+    {
+        return explode('_', $program);
+    }
+
 }

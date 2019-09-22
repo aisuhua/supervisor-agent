@@ -15,7 +15,7 @@ $app = new Micro($di);
  * 3. 返回 added/changed/removed
  */
 $app->get('/process/reload/{server_id}', function ($server_id) {
-
+    echo $server_id, PHP_EOL;
 });
 
 /**
@@ -25,16 +25,6 @@ $app->get('/process/reload/{server_id}', function ($server_id) {
  * 3. 返回 added/changed/removed
  */
 $app->get('/command/reload/{server_id}', function($server_id) {
-
-});
-
-/**
- * 处理 event listener 回调的事件
- * 1. 根据进程信息判断属于定时任务或者命令
- * 2. 根据进程当前状态执行更新操作，包括从配置文件删除进程所对应的配置项
- * 3. 更新定时任务或命令的记录状态并记录日志
- */
-$app->get('/event-handle', function($server_id) {
 
 });
 

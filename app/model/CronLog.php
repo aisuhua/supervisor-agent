@@ -31,7 +31,7 @@ class CronLog extends Model
 
     public function initialize()
     {
-        $this->belongsTo('server_id', 'Server', 'id', [
+        $this->belongsTo('server_id', Server::class, 'id', [
             'alias' => 'server',
             'reusable' => false
         ]);
@@ -39,7 +39,6 @@ class CronLog extends Model
 
     public function beforeCreate()
     {
-        $this->status = self::STATUS_INI;
         $this->create_time = time();
     }
 

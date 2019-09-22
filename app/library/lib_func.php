@@ -26,7 +26,7 @@ function size_format($bytes, $length = 2, $max_unit = '')
 
 function print_cli(...$args)
 {
-    echo date('Y-m-d H:i:s'), ">> " . implode('', $args), PHP_EOL;
+    echo '[' . date('Y-m-d H:i:s'), '] ' . implode('', $args), PHP_EOL;
 }
 
 function build_ini_string(array $parsed)

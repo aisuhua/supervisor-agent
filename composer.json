@@ -2,6 +2,7 @@
     "require": {
         "dragonmantank/cron-expression": "^2.3",
         "yzalis/supervisor": "^1.1",
-        "mtdowling/supervisor-event": "dev-master"
+        "mtdowling/supervisor-event": "dev-master",
+        "react/event-loop": "^1.1"
     }
 }
