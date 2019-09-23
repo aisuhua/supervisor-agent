@@ -1,18 +1,17 @@
 <?php
 namespace SupAgent\Task;
 
-use Phalcon\Cli\Task;
 use SupAgent\Model\Cron;
 use SupAgent\Model\CronLog;
 use Cron\CronExpression;
 use SupAgent\Model\Server;
+use SupAgent\Supervisor\StatusCode;
 use SupAgent\Supervisor\Supervisor;
 use React\EventLoop\Factory as EventLoop;
-use SupAgent\Lock\Cron as CronLock;
 use SupAgent\Exception\Exception;
 use Zend\XmlRpc\Client\Exception\FaultException;
 
-class CronTask extends Task
+class CronTask extends TaskBase
 {
     public function startAction($params)
     {
@@ -21,9 +20,11 @@ class CronTask extends Task
             throw new Exception('缺少 server_id 参数');
         }
 
-        // 修复进程状态
-
         $server_id = (int) $params[0];
+
+        // 修复进程状态
+        $this->clearAction($server_id);
+
         $loop = EventLoop::create();
 
         // 每分钟启动一次
@@ -96,33 +97,6 @@ class CronTask extends Task
         $loop->run();
     }
 
-    private function addCron(Supervisor &$supervisor, Cron &$cron)
-    {
-        // 锁定配置
-        $cronLock = new CronLock();
-        if (!$cronLock->lock())
-        {
-            throw new Exception("无法获得锁");
-        }
-
-        // 写入配置
-        if (file_put_contents(Server::CONF_CRON, $cron->getIni(), FILE_APPEND) === false)
-        {
-            throw new Exception("无法写入配置");
-        }
-
-        // 重载配置
-        $supervisor->reloadConfig();
-        $supervisor->addProcessGroup($cron->getProgram());
-        $supervisor->startProcessGroup($cron->getProgram());
-
-        // 解锁
-        if(!$cronLock->unlock())
-        {
-            throw new Exception("解锁失败");
-        }
-    }
-
     // 做一些清理工作
     protected function clearAction($server_id)
     {
@@ -158,7 +132,56 @@ class CronTask extends Task
         {
             try
             {
-                $supervisor->getProcessInfo($cronLog->getProcessName());
+                $process_info = $supervisor->getProcessInfo($cronLog->getProcessName());
+                if (in_array($process_info['statename'], ['STARTING', 'RUNNING', 'STOPPING']))
+                {
+                    continue;
+                }
+
+                // 进程退出 5 秒后仍未更新状态则认为需处理
+                if (time() - $process_info['stop'] < 10)
+                {
+                    continue;
+                }
+
+                // 处理进程已退出的几种情况
+                if ($process_info['statename'] == 'EXITED')
+                {
+                    $cronLog->status = $process_info['exitstatus'] == 0 ?
+                        CronLog::STATUS_FINISHED :
+                        CronLog::STATUS_FAILED;
+                    $cronLog->end_time = $process_info['stop'];
+                }
+                elseif ($process_info['statename'] == 'STOPPED')
+                {
+                    if ($process_info['start'] == 0)
+                    {
+                        $cronLog->status = CronLog::STATUS_UNKNOWN;
+                        $cronLog->end_time = time();
+                    }
+                    else
+                    {
+                        $cronLog->status = CronLog::STATUS_STOPPED;
+                        $cronLog->end_time = $process_info['stop'];
+                    }
+                }
+                elseif ($process_info['statename'] == 'UNKNOWN')
+                {
+                    $cronLog->status = CronLog::STATUS_UNKNOWN;
+                    $cronLog->end_time = $process_info['stop'] > 0 ? $process_info['stop'] : time();
+                }
+                elseif (in_array($process_info['statename'], ['FATAL']))
+                {
+                    $cronLog->status = CronLog::STATUS_FAILED;
+                    $cronLog->end_time = $process_info['stop'];
+                }
+
+                $cronLog->log = (string) @file_get_contents($cronLog->getLogFile());
+
+                if ($this->removeCron($supervisor, $cronLog))
+                {
+                    $cronLog->save();
+                }
             }
             catch (FaultException $e)
             {

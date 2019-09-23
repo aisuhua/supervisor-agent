@@ -55,11 +55,11 @@ require PATH_CONFIG_COMMON . '/inc_language.php';
 // 加载环境配置
 require PATH_CONFIG_IDC . '/inc_database.php';
 
-// 加载库文件
-require PATH_LIBRARY . '/lib_func.php';
-
 // 加载 composer 第三方库
 require PATH_ROOT . '/vendor/autoload.php';
+
+// 加载库函数
+require PATH_LIBRARY . '/lib_func.php';
 
 // 注册默认自动加载的目录
 $loader = new Loader();
