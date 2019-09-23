@@ -51,4 +51,9 @@ class CronLog extends Model
     {
         return $this->program . ':' . $this->program . '_0';
     }
+
+    public function getLogFile()
+    {
+        return PATH_SUPERVISOR_LOG . "/{$this->program}.log";
+    }
 }

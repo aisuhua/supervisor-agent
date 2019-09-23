@@ -24,6 +24,7 @@ class Cron extends Model
 
     const STATUS_ACTIVE = 1;
     const STATE_INACTIVE = -1;
+    const PROGRAM_PREFIX = '_supervisor_cron_';
 
     public function initialize()
     {
@@ -35,25 +36,40 @@ class Cron extends Model
         ]);
     }
 
-    /**
-     * 产生定时任务对应的程序名称
-     *
-     * @param $datetime
-     * @return string
-     */
-    public function getProgram($datetime)
+    public function getProgram()
     {
-        return '_supervisor_cron_' . $this->id . '_' . $datetime;
+        return self::PROGRAM_PREFIX . $this->id . '_' . date('YmdHi');
     }
 
     public static function isCron($program)
     {
-        return strpos($program, '_supervisor_cron_') === 0;
+        return strpos($program, self::PROGRAM_PREFIX) === 0;
     }
 
-    public static function parseProgram($program)
+    public function getIni()
     {
-        return explode('_', $program);
+        $program = $this->getProgram();
+
+        $ini = '';
+        $ini .= "[program:{$program}]" . PHP_EOL;
+        $ini .= "command={$this->command}" . PHP_EOL;
+        $ini .= "numprocs=1" . PHP_EOL;
+        $ini .= "numprocs_start=0" . PHP_EOL;
+        $ini .= "process_name=%(program_name)s_%(process_num)s" . PHP_EOL;
+        $ini .= "user={$this->user}" . PHP_EOL;
+        $ini .= "directory=%(here)s" . PHP_EOL;
+        $ini .= "startsecs=0" . PHP_EOL;
+        $ini .= "autostart=false" . PHP_EOL;
+        $ini .= "startretries=0" . PHP_EOL;
+        $ini .= "autorestart=false" . PHP_EOL;
+        $ini .= "redirect_stderr=true" . PHP_EOL;
+        $ini .= "stdout_logfile=" . PATH_SUPERVISOR_LOG . "/{$program}.log" . PHP_EOL;
+        $ini .= "stdout_logfile_backups=0" . PHP_EOL;
+        $ini .= "stdout_logfile_maxbytes=8MB" . PHP_EOL;
+
+        return $ini;
     }
+
+
 
 }

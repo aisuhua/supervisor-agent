@@ -21,6 +21,8 @@ define('PATH_CACHE', PATH_APP . '/cache');
 define('PATH_LOG', PATH_APP . '/log');
 define('PATH_LIBRARY', PATH_APP . '/library');
 define('PATH_SUPERVISOR', PATH_ROOT . '/supervisor');
+define('PATH_SUPERVISOR_CONFIG', PATH_SUPERVISOR . '/conf.d');
+define('PATH_SUPERVISOR_LOG', PATH_SUPERVISOR . '/log');
 
 if (DEBUG_MODE)
 {

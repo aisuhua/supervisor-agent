@@ -19,6 +19,10 @@ class Server extends Model
     public $create_time;
     public $update_time;
 
+    const CONF_CRON = PATH_SUPERVISOR_CONFIG . '/cron.conf';
+    const CONF_COMMAND = PATH_SUPERVISOR_CONFIG . '/command.conf';
+    const CONF_PROCESS = PATH_SUPERVISOR_CONFIG . '/process.conf';
+
     public function getSupervisor()
     {
 
