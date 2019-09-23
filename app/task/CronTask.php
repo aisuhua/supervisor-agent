@@ -10,15 +10,18 @@ use SupAgent\Supervisor\Supervisor;
 use React\EventLoop\Factory as EventLoop;
 use SupAgent\Lock\Cron as CronLock;
 use SupAgent\Exception\Exception;
+use Zend\XmlRpc\Client\Exception\FaultException;
 
 class CronTask extends Task
 {
-    public function checkPerMinuteAction($params)
+    public function startAction($params)
     {
         if (empty($params[0]))
         {
             throw new Exception('缺少 server_id 参数');
         }
+
+        // 修复进程状态
 
         $server_id = (int) $params[0];
         $loop = EventLoop::create();
@@ -117,6 +120,50 @@ class CronTask extends Task
         if(!$cronLock->unlock())
         {
             throw new Exception("解锁失败");
+        }
+    }
+
+    // 做一些清理工作
+    protected function clearAction($server_id)
+    {
+        /** @var \SupAgent\Model\Server $server */
+        $server = Server::findFirst($server_id);
+        if (!$server)
+        {
+            throw new Exception('该服务器不存在');
+        }
+
+        $supervisor = new Supervisor(
+            $server->id,
+            $server->ip,
+            $server->username,
+            $server->password,
+            $server->port
+        );
+
+        // 修复进程状态
+        $cronLogs = CronLog::find([
+            'server_id = :server_id: AND status IN({status:array})',
+            'bind' => [
+                'server_id' => $server_id,
+                'status' => [
+                    CronLog::STATUS_INI,
+                    CronLog::STATUS_STARTED
+                ]
+            ]
+        ]);
+
+        /** @var CronLog $cronLog */
+        foreach ($cronLogs as $cronLog)
+        {
+            try
+            {
+                $supervisor->getProcessInfo($cronLog->getProcessName());
+            }
+            catch (FaultException $e)
+            {
+
+            }
         }
     }
 }

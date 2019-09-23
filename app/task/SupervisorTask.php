@@ -20,7 +20,6 @@ class SupervisorTask extends Task
         $listener = new EventListener();
 
         $listener->listen(function(EventListener $listener, EventNotification $event) {
-            // 处理信号量
             // 占用内存是否超过限制
             // 是否有文件发生修改
 
