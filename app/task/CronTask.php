@@ -16,6 +16,8 @@ class CronTask extends TaskBase
 {
     public function startAction($params)
     {
+        echo print_cli("running....");
+
         if (empty($params[0]))
         {
             throw new Exception('缺少 server_id 参数');
@@ -74,25 +76,30 @@ class CronTask extends TaskBase
                         continue;
                     }
 
-                    $program = $cron->getProgram($now->format('YmdHi'));
-                    print_cli("{$program} is starting");
+                    $this->db->begin();
 
                     // 添加执行日志
                     $cronLog = new CronLog();
                     $cronLog->cron_id = $cron->id;
                     $cronLog->server_id = $cron->server_id;
-                    $cronLog->program = $program;
                     $cronLog->command = $cron->command;
                     $cronLog->status = CronLog::STATUS_INI;
                     $cronLog->create();
 
+                    $program = $cron->getProgram($cronLog->id);
                     $this->addCron($supervisor, $program, $cron->getIni($program));
+
+                    $cronLog->refresh();
+                    $cronLog->program = $program;
+                    $cronLog->save();
 
                     // 更新上次执行时间
                     $cron->last_time = $now->format('U');
                     $cron->save();
 
-                    print_cli("{$program} has started");
+                    $this->db->commit();
+
+                    print_cli("{$program} started");
                 }
 
                 $cronLock->unlock();
@@ -200,6 +207,8 @@ class CronTask extends TaskBase
             {
                 $cronLog->save();
                 $cronLog->truncate();
+
+                print_cli("{$cronLog->program} fixed");
             }
         }
 
@@ -208,6 +217,11 @@ class CronTask extends TaskBase
 
         foreach ($processes as $process)
         {
+            if (in_array($process['statename'], ['STARTING', 'RUNNING', 'STOPPING']))
+            {
+                continue;
+            }
+
             // 停止后还没有超过10秒则跳过
             if ($process['stop'] > 0 &&  time() - $process['stop'] < 10)
             {
@@ -224,23 +238,76 @@ class CronTask extends TaskBase
                     ]
                 ]);
 
-                // 进程找不到对应的记录则删除
+
                 if (!$cronLog)
                 {
+                    // 进程找不到对应的记录则删除
                     $this->removeCron($supervisor, $process['group']);
                     @unlink($process['stdout_logfile']);
-                    continue;
+                }
+                else
+                {
+                    // 如果存在记录则表明该记录状态已经是已完成
+                    // 删除该进程
+                    $this->removeCron($supervisor, $process['group']);
                 }
 
-                // 如果存在记录则表明该记录状态已经是已完成
-                // 删除该进程
-                $this->removeCron($supervisor, $process['group']);
+                print_cli("{$process['group']} removed");
             }
         }
 
-        // 清理无效的日志文件
-
-
         $cronLock->unlock();
+
+        // 清理无效的日志文件
+        $delete_files = [];
+        $cron_files = [];
+
+        $files = scandir(PATH_SUPERVISOR_LOG, 1);
+        foreach ($files as $file)
+        {
+            if (Cron::isCron($file))
+            {
+                $key = explode('_', $file)[3];
+                $cron_files[$key][] = $file;
+
+                if (count($cron_files[$key]) > Cron::LOG_SIZE)
+                {
+                    $delete_files[] = $file;
+                }
+            }
+        }
+
+        if (!empty($cron_files))
+        {
+            $cron_ids = array_keys($cron_files);
+
+            $cron = Cron::find([
+                'id IN({ids:array})',
+                'bind' => [
+                    'ids' => $cron_ids
+                ],
+                'columns' => 'id'
+            ]);
+
+            $delete_ids = array_diff($cron_ids, array_column($cron->toArray(), 'id'));
+            if (!empty($delete_ids))
+            {
+                foreach ($delete_ids as $delete_id)
+                {
+                    $delete_files = array_merge($delete_files, $cron_files[$delete_id]);
+                }
+            }
+        }
+
+        if (!empty($delete_files))
+        {
+            foreach ($delete_files as $delete_file)
+            {
+                if (@unlink(PATH_SUPERVISOR_LOG . '/' . $delete_file))
+                {
+                    print_cli("{$delete_file} deleted");
+                }
+            }
+        }
     }
 }

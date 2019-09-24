@@ -29,8 +29,6 @@ class CronLog extends Model
     const STATUS_UNKNOWN = -2; // 无法确定进程的执行状态
     const STATUS_STOPPED = -3; // 被中断
 
-    const LOG_SIZE = 5;
-
     public function initialize()
     {
         $this->belongsTo('server_id', Server::class, 'id', [
@@ -73,7 +71,7 @@ class CronLog extends Model
                 ]
             ],
             'order' => 'id desc',
-            'offset' => self::LOG_SIZE,
+            'offset' => Cron::LOG_SIZE,
             'limit' => 10000
         ]);
 

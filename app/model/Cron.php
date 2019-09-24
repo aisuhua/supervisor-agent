@@ -26,6 +26,8 @@ class Cron extends Model
     const STATE_INACTIVE = -1;
     const PROGRAM_PREFIX = '_supervisor_cron_';
 
+    const LOG_SIZE = 4;
+
     public function initialize()
     {
         $this->keepSnapshots(true);
@@ -46,9 +48,9 @@ class Cron extends Model
         return PATH_SUPERVISOR_LOG . "/{$program}.log";
     }
 
-    public function getProgram($datetime)
+    public function getProgram($process_id)
     {
-        return self::PROGRAM_PREFIX . $this->id . '_' . $datetime;
+        return self::PROGRAM_PREFIX . $this->id . '_' . $process_id;
     }
 
     public function getIni($program)
