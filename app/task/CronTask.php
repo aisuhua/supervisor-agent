@@ -76,8 +76,6 @@ class CronTask extends TaskBase
                         continue;
                     }
 
-                    $this->db->begin();
-
                     // 添加执行日志
                     $cronLog = new CronLog();
                     $cronLog->cron_id = $cron->id;
@@ -87,17 +85,15 @@ class CronTask extends TaskBase
                     $cronLog->create();
 
                     $program = $cron->getProgram($cronLog->id);
-                    $this->addCron($supervisor, $program, $cron->getIni($program));
-
                     $cronLog->refresh();
                     $cronLog->program = $program;
                     $cronLog->save();
 
+                    $this->addCron($supervisor, $program, $cron->getIni($program));
+
                     // 更新上次执行时间
                     $cron->last_time = $now->format('U');
                     $cron->save();
-
-                    $this->db->commit();
 
                     print_cli("{$program} started");
                 }
