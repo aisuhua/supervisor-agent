@@ -10,6 +10,7 @@ use SupAgent\Supervisor\Supervisor;
 use React\EventLoop\Factory as EventLoop;
 use SupAgent\Exception\Exception;
 use Zend\XmlRpc\Client\Exception\FaultException;
+use SupAgent\Lock\Cron as CronLock;
 
 class CronTask extends TaskBase
 {
@@ -42,6 +43,9 @@ class CronTask extends TaskBase
                 {
                     return true;
                 }
+
+                $cronLock = new CronLock();
+                $cronLock->lock();
 
                 /** @var \SupAgent\Model\Server $server */
                 $server = Server::findFirst($server_id);
@@ -82,7 +86,7 @@ class CronTask extends TaskBase
                     $cronLog->status = CronLog::STATUS_INI;
                     $cronLog->create();
 
-                    $this->addCron($supervisor, $program, $cron);
+                    $this->addCron($supervisor, $program, $cron->getIni($program));
 
                     // 更新上次执行时间
                     $cron->last_time = $now->format('U');
@@ -90,6 +94,8 @@ class CronTask extends TaskBase
 
                     print_cli("{$program} has started");
                 }
+
+                $cronLock->unlock();
             });
         });
 
@@ -99,6 +105,10 @@ class CronTask extends TaskBase
     // 做一些清理工作
     protected function clearAction($server_id)
     {
+        // 锁定操作
+        $cronLock = new CronLock();
+        $cronLock->lock();
+
         /** @var \SupAgent\Model\Server $server */
         $server = Server::findFirst($server_id);
         if (!$server)
@@ -114,7 +124,7 @@ class CronTask extends TaskBase
             $server->port
         );
 
-        // 修复进程状态
+        // 修复定时任务状态
         $cronLogs = CronLog::find([
             'server_id = :server_id: AND status IN({status:array})',
             'bind' => [
@@ -139,8 +149,8 @@ class CronTask extends TaskBase
                     continue;
                 }
 
-                // 进程退出 10 秒后仍未更新状态则认为需处理
-                if (time() - $process_info['stop'] < 10)
+                // 停止后还没有超过10秒则跳过
+                if ($process_info['stop'] > 0 &&  time() - $process_info['stop'] < 10)
                 {
                     continue;
                 }
@@ -155,15 +165,7 @@ class CronTask extends TaskBase
                 }
                 elseif ($process_info['statename'] == 'STOPPED')
                 {
-                    if ($process_info['start'] == 0 || $cronLog->status == CronLog::STATUS_INI)
-                    {
-                        $cronLog->status = CronLog::STATUS_UNKNOWN;
-                    }
-                    else
-                    {
-                        $cronLog->status = CronLog::STATUS_STOPPED;
-                    }
-
+                    $cronLog->status = CronLog::STATUS_STOPPED;
                     $cronLog->end_time = $process_info['stop'];
                 }
                 elseif ($process_info['statename'] == 'UNKNOWN')
@@ -177,16 +179,68 @@ class CronTask extends TaskBase
                     $cronLog->end_time = $process_info['stop'];
                 }
 
-                if ($this->removeCron($supervisor, $cronLog))
+                // 以最后状态时间为准
+                if ($process_info['start'] > 0)
                 {
-                    $cronLog->save();
-                    $cronLog->truncate();
+                    $cronLog->start_time = $process_info['start'];
                 }
             }
             catch (FaultException $e)
             {
+                if ($e->getCode() != StatusCode::BAD_NAME)
+                {
+                    throw $e;
+                }
 
+                // 进程不存在
+                $cronLog->status = CronLog::STATUS_UNKNOWN;
+            }
+
+            if ($this->removeCron($supervisor, $cronLog->program))
+            {
+                $cronLog->save();
+                $cronLog->truncate();
             }
         }
+
+        // 修复进程状态
+        $processes = $supervisor->getAllProcessInfo();
+
+        foreach ($processes as $process)
+        {
+            // 停止后还没有超过10秒则跳过
+            if ($process['stop'] > 0 &&  time() - $process['stop'] < 10)
+            {
+                continue;
+            }
+
+            if (Cron::isCron($process['group']))
+            {
+                $cronLog = CronLog::findFirst([
+                    'server_id = :server_id: AND program = :program:',
+                    'bind' => [
+                        'server_id' => $server_id,
+                        'program' => $process['group']
+                    ]
+                ]);
+
+                // 进程找不到对应的记录则删除
+                if (!$cronLog)
+                {
+                    $this->removeCron($supervisor, $process['group']);
+                    @unlink($process['stdout_logfile']);
+                    continue;
+                }
+
+                // 如果存在记录则表明该记录状态已经是已完成
+                // 删除该进程
+                $this->removeCron($supervisor, $process['group']);
+            }
+        }
+
+        // 清理无效的日志文件
+
+
+        $cronLock->unlock();
     }
 }

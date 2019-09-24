@@ -13,27 +13,14 @@ use Zend\XmlRpc\Client\Exception\FaultException;
 
 class TaskBase extends Task
 {
-    protected function removeCron(Supervisor $supervisor, CronLog $cronLog)
+    protected function removeCron(Supervisor &$supervisor, $program)
     {
-        $cronLock = new CronLock();
-        if (!$cronLock->lock())
-        {
-            throw new Exception("无法获得锁");
-        }
-
-        $this->removeConfig($supervisor, $cronLog->program, $cronLog->getLogFile());
-
-        if(!$cronLock->unlock())
-        {
-            throw new Exception("解锁失败");
-        }
-
-        return true;
+        return $this->removeConfig($supervisor, Server::CONF_CRON, $program);
     }
 
-    protected function removeConfig(Supervisor $supervisor, $program, $log_file)
+    protected function removeConfig(Supervisor &$supervisor, $conf_path, $program)
     {
-        $content = file_get_contents(Server::CONF_CRON);
+        $content = file_get_contents($conf_path);
         if ($content === false)
         {
             throw new Exception("无法读取文件");
@@ -53,7 +40,7 @@ class TaskBase extends Task
                 unset($parsed[$key]);
                 $ini = build_ini_string($parsed);
 
-                if (file_put_contents(Server::CONF_CRON, $ini) === false)
+                if (file_put_contents($conf_path, $ini) === false)
                 {
                     throw new Exception("配置写入失败");
                 }
@@ -63,6 +50,32 @@ class TaskBase extends Task
         try
         {
             $supervisor->reloadConfig();
+        }
+        catch (FaultException $e)
+        {
+            if ($e->getCode() != StatusCode::SHUTDOWN_STATE)
+            {
+                throw $e;
+            }
+        }
+
+        try
+        {
+            $supervisor->stopProcessGroup($program);
+        }
+        catch (FaultException $e)
+        {
+            if ($e->getCode() != StatusCode::BAD_NAME &&
+                $e->getCode() != StatusCode::NOT_RUNNING &&
+                $e->getCode() != StatusCode::SHUTDOWN_STATE
+            )
+            {
+                throw $e;
+            }
+        }
+
+        try
+        {
             $supervisor->removeProcessGroup($program);
         }
         catch (FaultException $e)
@@ -71,7 +84,7 @@ class TaskBase extends Task
                 $e->getCode() == StatusCode::SHUTDOWN_STATE
             )
             {
-                goto end;
+                return true;
             }
             elseif ($e->getCode() == StatusCode::STILL_RUNNING)
             {
@@ -81,42 +94,25 @@ class TaskBase extends Task
             throw $e;
         }
 
-        end:
-//        if (!@unlink($log_file))
-//        {
-//            if (is_file($log_file))
-//            {
-//                throw new Exception("日志文件删除失败");
-//            }
-//        }
-
         return true;
     }
 
-    protected function addCron(Supervisor &$supervisor, &$program, Cron &$cron)
+    protected function addCron(Supervisor &$supervisor, $program, $ini)
     {
-        // 锁定配置
-        $cronLock = new CronLock();
-        if (!$cronLock->lock())
-        {
-            throw new Exception("无法获得锁");
-        }
+        return $this->addConfig($supervisor, Server::CONF_CRON, $program, $ini);
+    }
 
-        // 写入配置
-        if (file_put_contents(Server::CONF_CRON, $cron->getIni($program), FILE_APPEND) === false)
+    public function addConfig(Supervisor &$supervisor, $conf_path, $program, $ini)
+    {
+        if (file_put_contents($conf_path, $ini, FILE_APPEND) === false)
         {
             throw new Exception("无法写入配置");
         }
 
-        // 重载配置
         $supervisor->reloadConfig();
         $supervisor->addProcessGroup($program);
         $supervisor->startProcessGroup($program);
 
-        // 解锁
-        if(!$cronLock->unlock())
-        {
-            throw new Exception("解锁失败");
-        }
+        return true;
     }
 }

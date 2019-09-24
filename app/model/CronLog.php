@@ -29,7 +29,7 @@ class CronLog extends Model
     const STATUS_UNKNOWN = -2; // 无法确定进程的执行状态
     const STATUS_STOPPED = -3; // 被中断
 
-    const LOG_SIZE = 3;
+    const LOG_SIZE = 5;
 
     public function initialize()
     {

@@ -6,6 +6,8 @@ use Mtdowling\Supervisor\EventNotification;
 use SupAgent\Model\Cron;
 use SupAgent\Supervisor\Supervisor;
 use SupAgent\Model\CronLog;
+use Zend\XmlRpc\Client\Exception\FaultException;
+use SupAgent\Lock\Cron as CronLock;
 
 class SupervisorTask extends TaskBase
 {
@@ -31,6 +33,8 @@ class SupervisorTask extends TaskBase
 
             if (Cron::isCron($eventData['groupname']))
             {
+                $cronLock = new CronLock();
+
                 /** @var CronLog $cronLog */
                 $cronLog = CronLog::findFirst([
                     'program = :program:',
@@ -42,14 +46,7 @@ class SupervisorTask extends TaskBase
                 if (!$cronLog)
                 {
                     $listener->log("定时任务不存在");
-                    return true;
-                }
-
-                if ($eventData['eventname'] == 'PROCESS_STATE_STARTING')
-                {
-                    $cronLog->status = CronLog::STATUS_STARTED;
-                    $cronLog->start_time = time();
-                    $cronLog->save();
+                    $cronLock->unlock();
 
                     return true;
                 }
@@ -59,27 +56,56 @@ class SupervisorTask extends TaskBase
                 if (!$server)
                 {
                     $listener->log("服务器不存在");
+                    $cronLock->unlock();
+
                     return true;
                 }
 
                 $supervisor = new Supervisor(
                     $server->id,
-                    '127.0.0.1',
+                    $server->ip,
                     $server->username,
                     $server->password,
                     $server->port
                 );
 
+                try
+                {
+                    $process_info = $supervisor->getProcessInfo($cronLog->getProcessName());
+                }
+                catch (FaultException $e) {}
+
+                // 开始事件
+                if ($eventData['eventname'] == 'PROCESS_STATE_STARTING')
+                {
+                    $cronLog->status = CronLog::STATUS_STARTED;
+                    $cronLog->start_time = empty($process_info['start']) ? time() : $process_info['start'];
+                    $cronLog->save();
+                    $cronLock->unlock();
+
+                    return true;
+                }
+
+                // 结束事件
                 $cronLog->status = self::getStatusByEvent($eventData);
-                $cronLog->end_time = time();
+                $cronLog->end_time = empty($process_info['stop']) ? time() : $process_info['stop'];
+
+                // 如果有则以最后的时间为准
+                if (!empty($process_info['start']))
+                {
+                    $cronLog->start_time = $process_info['start'];
+                }
+
                 // $cronLog->log = (string) @file_get_contents($cronLog->getLogFile());
 
                 // 删除进程配置
-                if ($this->removeCron($supervisor, $cronLog))
+                if ($this->removeCron($supervisor, $cronLog->program))
                 {
                     $cronLog->save();
                     $cronLog->truncate();
                 }
+
+                $cronLock->unlock();
 
                 return true;
             }

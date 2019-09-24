@@ -25,7 +25,7 @@ class File
     {
         if (!flock($this->fp, LOCK_EX))
         {
-            return false;
+            throw new Exception("无法获得锁：{$this->filename}");
         }
 
         $this->locked = true;
@@ -42,7 +42,7 @@ class File
 
         if (!flock($this->fp, LOCK_UN))
         {
-            return false;
+            throw new Exception("解锁失败：{$this->filename}");
         }
 
         fclose($this->fp);
