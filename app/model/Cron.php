@@ -36,20 +36,23 @@ class Cron extends Model
         ]);
     }
 
-    public function getProgram()
-    {
-        return self::PROGRAM_PREFIX . $this->id . '_' . date('YmdHi');
-    }
-
     public static function isCron($program)
     {
         return strpos($program, self::PROGRAM_PREFIX) === 0;
     }
 
-    public function getIni()
+    public static function getLogFile($program)
     {
-        $program = $this->getProgram();
+        return PATH_SUPERVISOR_LOG . "/{$program}.log";
+    }
 
+    public function getProgram($datetime)
+    {
+        return self::PROGRAM_PREFIX . $this->id . '_' . $datetime;
+    }
+
+    public function getIni($program)
+    {
         $ini = '';
         $ini .= "[program:{$program}]" . PHP_EOL;
         $ini .= "command={$this->command}" . PHP_EOL;
@@ -63,9 +66,9 @@ class Cron extends Model
         $ini .= "startretries=0" . PHP_EOL;
         $ini .= "autorestart=false" . PHP_EOL;
         $ini .= "redirect_stderr=true" . PHP_EOL;
-        $ini .= "stdout_logfile=" . PATH_SUPERVISOR_LOG . "/{$program}.log" . PHP_EOL;
+        $ini .= "stdout_logfile=" . self::getLogFile($program) . PHP_EOL;
         $ini .= "stdout_logfile_backups=0" . PHP_EOL;
-        $ini .= "stdout_logfile_maxbytes=8MB" . PHP_EOL;
+        $ini .= "stdout_logfile_maxbytes=50MB" . PHP_EOL;
 
         return $ini;
     }

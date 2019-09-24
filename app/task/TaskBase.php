@@ -82,18 +82,18 @@ class TaskBase extends Task
         }
 
         end:
-        if (!@unlink($log_file))
-        {
-            if (is_file($log_file))
-            {
-                throw new Exception("日志文件删除失败");
-            }
-        }
+//        if (!@unlink($log_file))
+//        {
+//            if (is_file($log_file))
+//            {
+//                throw new Exception("日志文件删除失败");
+//            }
+//        }
 
         return true;
     }
 
-    protected function addCron(Supervisor &$supervisor, Cron &$cron)
+    protected function addCron(Supervisor &$supervisor, &$program, Cron &$cron)
     {
         // 锁定配置
         $cronLock = new CronLock();
@@ -103,15 +103,15 @@ class TaskBase extends Task
         }
 
         // 写入配置
-        if (file_put_contents(Server::CONF_CRON, $cron->getIni(), FILE_APPEND) === false)
+        if (file_put_contents(Server::CONF_CRON, $cron->getIni($program), FILE_APPEND) === false)
         {
             throw new Exception("无法写入配置");
         }
 
         // 重载配置
         $supervisor->reloadConfig();
-        $supervisor->addProcessGroup($cron->getProgram());
-        $supervisor->startProcessGroup($cron->getProgram());
+        $supervisor->addProcessGroup($program);
+        $supervisor->startProcessGroup($program);
 
         // 解锁
         if(!$cronLock->unlock())

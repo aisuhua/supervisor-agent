@@ -70,7 +70,7 @@ class CronTask extends TaskBase
                         continue;
                     }
 
-                    $program = $cron->getProgram();
+                    $program = $cron->getProgram($now->format('YmdHi'));
                     print_cli("{$program} is starting");
 
                     // 添加执行日志
@@ -79,11 +79,10 @@ class CronTask extends TaskBase
                     $cronLog->server_id = $cron->server_id;
                     $cronLog->program = $program;
                     $cronLog->command = $cron->command;
-                    $cronLog->start_time = time();
                     $cronLog->status = CronLog::STATUS_INI;
                     $cronLog->create();
 
-                    $this->addCron($supervisor, $cron);
+                    $this->addCron($supervisor, $program, $cron);
 
                     // 更新上次执行时间
                     $cron->last_time = $now->format('U');
@@ -132,13 +131,15 @@ class CronTask extends TaskBase
         {
             try
             {
+                // 有可能不存在
                 $process_info = $supervisor->getProcessInfo($cronLog->getProcessName());
+
                 if (in_array($process_info['statename'], ['STARTING', 'RUNNING', 'STOPPING']))
                 {
                     continue;
                 }
 
-                // 进程退出 5 秒后仍未更新状态则认为需处理
+                // 进程退出 10 秒后仍未更新状态则认为需处理
                 if (time() - $process_info['stop'] < 10)
                 {
                     continue;
@@ -154,21 +155,21 @@ class CronTask extends TaskBase
                 }
                 elseif ($process_info['statename'] == 'STOPPED')
                 {
-                    if ($process_info['start'] == 0)
+                    if ($process_info['start'] == 0 || $cronLog->status == CronLog::STATUS_INI)
                     {
                         $cronLog->status = CronLog::STATUS_UNKNOWN;
-                        $cronLog->end_time = time();
                     }
                     else
                     {
                         $cronLog->status = CronLog::STATUS_STOPPED;
-                        $cronLog->end_time = $process_info['stop'];
                     }
+
+                    $cronLog->end_time = $process_info['stop'];
                 }
                 elseif ($process_info['statename'] == 'UNKNOWN')
                 {
                     $cronLog->status = CronLog::STATUS_UNKNOWN;
-                    $cronLog->end_time = $process_info['stop'] > 0 ? $process_info['stop'] : time();
+                    $cronLog->end_time = $process_info['stop'];
                 }
                 elseif (in_array($process_info['statename'], ['FATAL']))
                 {
@@ -176,11 +177,10 @@ class CronTask extends TaskBase
                     $cronLog->end_time = $process_info['stop'];
                 }
 
-                $cronLog->log = (string) @file_get_contents($cronLog->getLogFile());
-
                 if ($this->removeCron($supervisor, $cronLog))
                 {
                     $cronLog->save();
+                    $cronLog->truncate();
                 }
             }
             catch (FaultException $e)

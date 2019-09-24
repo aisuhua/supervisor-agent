@@ -48,6 +48,7 @@ class SupervisorTask extends TaskBase
                 if ($eventData['eventname'] == 'PROCESS_STATE_STARTING')
                 {
                     $cronLog->status = CronLog::STATUS_STARTED;
+                    $cronLog->start_time = time();
                     $cronLog->save();
 
                     return true;
@@ -71,12 +72,13 @@ class SupervisorTask extends TaskBase
 
                 $cronLog->status = self::getStatusByEvent($eventData);
                 $cronLog->end_time = time();
-                $cronLog->log = (string) @file_get_contents($cronLog->getLogFile());
+                // $cronLog->log = (string) @file_get_contents($cronLog->getLogFile());
 
                 // 删除进程配置
                 if ($this->removeCron($supervisor, $cronLog))
                 {
                     $cronLog->save();
+                    $cronLog->truncate();
                 }
 
                 return true;

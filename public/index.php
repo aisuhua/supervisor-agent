@@ -28,4 +28,11 @@ $app->get('/command/reload/{server_id}', function($server_id) {
 
 });
 
+/**
+ * 读取定时任务或命令日志
+ */
+$app->get('/log/tail/{length}', function($length) {
+
+});
+
 $app->handle();
