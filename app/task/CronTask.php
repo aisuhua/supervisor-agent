@@ -8,6 +8,7 @@ use SupAgent\Model\Server;
 use SupAgent\Supervisor\StatusCode;
 use React\EventLoop\Factory as EventLoop;
 use SupAgent\Exception\Exception;
+use SupAgent\Supervisor\Supervisor;
 use Zend\XmlRpc\Client\Exception\FaultException;
 use SupAgent\Lock\Cron as CronLock;
 
@@ -98,7 +99,12 @@ class CronTask extends TaskBase
         $loop->run();
     }
 
-    // 做一些清理工作
+    /**
+     * 做一些清理工作
+     *
+     * @param $server_id
+     * @throws Exception
+     */
     protected function clearAction($server_id)
     {
         // 锁定操作
@@ -113,6 +119,24 @@ class CronTask extends TaskBase
         }
 
         $supervisor = $server->getSupervisor();
+
+        $this->clearCronLog($server, $supervisor);
+        $this->clearProcess($server, $supervisor);
+        $this->clearConfig($server, $supervisor);
+        $this->clearLog($server);
+
+        $cronLock->unlock();
+    }
+
+    /**
+     * 清理不一致的定时任务日志
+     *
+     * @param Server $server
+     * @param Supervisor $supervisor
+     */
+    protected function clearCronLog(Server &$server, Supervisor &$supervisor)
+    {
+        $server_id = $server->id;
 
         // 修复定时任务状态
         $cronLogs = CronLog::find([
@@ -184,6 +208,7 @@ class CronTask extends TaskBase
 
                 // 进程不存在
                 $cronLog->status = CronLog::STATUS_UNKNOWN;
+                $cronLog->end_time = time();
             }
 
             if ($this->removeCron($supervisor, $cronLog->program))
@@ -194,6 +219,17 @@ class CronTask extends TaskBase
                 print_cli("{$cronLog->program} record fixed");
             }
         }
+    }
+
+    /**
+     * 清理僵尸进程
+     *
+     * @param Server $server
+     * @param Supervisor $supervisor
+     */
+    protected function clearProcess(Server &$server, Supervisor &$supervisor)
+    {
+        $server_id = $server->id;
 
         // 修复进程状态
         $processes = $supervisor->getAllProcessInfo();
@@ -221,7 +257,6 @@ class CronTask extends TaskBase
                     ]
                 ]);
 
-
                 if (!$cronLog)
                 {
                     // 进程找不到对应的记录则删除
@@ -238,6 +273,18 @@ class CronTask extends TaskBase
                 print_cli("{$process['group']} process removed");
             }
         }
+    }
+
+    /**
+     * 清理不一致的配置
+     *
+     * @param Server $server
+     * @param Supervisor $supervisor
+     * @throws Exception
+     */
+    protected function clearConfig(Server &$server, Supervisor &$supervisor)
+    {
+        $server_id = $server->id;
 
         // 检查配置是否有多余的项
         $content = trim(file_get_contents(Server::CONF_CRON));
@@ -285,10 +332,17 @@ class CronTask extends TaskBase
                 throw new Exception("配置写入失败");
             }
         }
+    }
 
-        $cronLock->unlock();
+    /**
+     * 清理不一致的日志文件
+     *
+     * @param Server $server
+     */
+    public function clearLog(Server &$server)
+    {
+        $server_id = $server->id;
 
-        // 清理无效的日志文件
         $delete_files = [];
         $cron_files = [];
 
@@ -312,8 +366,9 @@ class CronTask extends TaskBase
             $cron_ids = array_keys($cron_files);
 
             $cron = Cron::find([
-                'id IN({ids:array})',
+                'server_id = :server_id: AND id IN({ids:array})',
                 'bind' => [
+                    'server_id' => $server_id,
                     'ids' => $cron_ids
                 ],
                 'columns' => 'id'

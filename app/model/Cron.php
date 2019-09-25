@@ -48,9 +48,9 @@ class Cron extends Model
         return PATH_SUPERVISOR_LOG . "/{$program}.log";
     }
 
-    public function getProgram($process_id)
+    public function getProgram($id)
     {
-        return self::PROGRAM_PREFIX . $this->id . '_' . $process_id;
+        return self::PROGRAM_PREFIX . $this->id . '_' . $id;
     }
 
     public function getIni($program)
