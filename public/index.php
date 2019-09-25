@@ -2,7 +2,9 @@
 /**
  * @var Phalcon\Di $di
  */
+
 use Phalcon\Mvc\Micro;
+use SupAgent\Model\CronLog;
 
 require __DIR__ . '/../init.php';
 
@@ -30,9 +32,46 @@ $app->get('/command/reload/{server_id}', function($server_id) {
 
 /**
  * 读取定时任务或命令日志
+ * @param $id
+ * @return mixed
  */
-$app->get('/log/tail/{length}', function($length) {
+$app->get('/cron-log/log/{id}/{file_size}', function ($id, $file_size) use ($app) {
+    $result = [];
 
+    /** @var CronLog $cronLog */
+    $cronLog = CronLog::findFirst($id);
+    if (!$cronLog)
+    {
+        $result['state'] = 0;
+        $result['message'] = "该日志不存在";
+
+        return $app->response->setJsonContent($result);
+    }
+
+    $log_file = $cronLog->getLogFile();
+    if (!file_exists($log_file))
+    {
+        $result['state'] = 0;
+        $result['message'] = "该日志不存在或已经被删除";
+
+        return $app->response->setJsonContent($result);
+    }
+
+    if ($file_size == 0)
+    {
+        $file_size = filesize($log_file);
+    }
+
+    if ($file_size == 0)
+    {
+        exit();
+    }
+
+    $fp = fopen($log_file, 'r');
+    echo frread($fp, $file_size);
+    exit();
 });
+
+
 
 $app->handle();

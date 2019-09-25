@@ -43,3 +43,10 @@ function build_ini_string(array $parsed)
 
     return $ini;
 }
+
+function frread($fp, $bytes)
+{
+    fseek($fp, -$bytes, SEEK_END);
+
+    return fread($fp, $bytes);
+}

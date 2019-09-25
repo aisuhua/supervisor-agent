@@ -4,11 +4,8 @@ use SupAgent\Model\CronLog;
 
 require 'init.php';
 
-$content = file_get_contents(\SupAgent\Model\Server::CONF_CRON);
-$parsed = parse_ini_string($content, true, INI_SCANNER_RAW);
-if ($parsed === false)
-{
-    throw new Exception("无法解析配置");
-}
+$fp = fopen('init.php', 'r');
+fseek($fp, -1024 * 1024, SEEK_END);
+$data = fread($fp, 1024 * 1024);
 
-var_dump($parsed);
+var_dump($data);
