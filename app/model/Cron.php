@@ -26,7 +26,7 @@ class Cron extends Model
     const STATE_INACTIVE = -1;
     const PROGRAM_PREFIX = '_supervisor_cron_';
 
-    const LOG_SIZE = 4;
+    const LOG_SIZE = 5;
 
     public function initialize()
     {

@@ -6,7 +6,6 @@ use SupAgent\Model\CronLog;
 use Cron\CronExpression;
 use SupAgent\Model\Server;
 use SupAgent\Supervisor\StatusCode;
-use SupAgent\Supervisor\Supervisor;
 use React\EventLoop\Factory as EventLoop;
 use SupAgent\Exception\Exception;
 use Zend\XmlRpc\Client\Exception\FaultException;
@@ -56,13 +55,7 @@ class CronTask extends TaskBase
                     throw new Exception('该服务器不存在');
                 }
 
-                $supervisor = new Supervisor(
-                    $server->id,
-                    $server->ip,
-                    $server->username,
-                    $server->password,
-                    $server->port
-                );
+                $supervisor = $server->getSupervisor();
 
                 $now = new \DateTime();
 
@@ -119,13 +112,7 @@ class CronTask extends TaskBase
             throw new Exception('该服务器不存在');
         }
 
-        $supervisor = new Supervisor(
-            $server->id,
-            $server->ip,
-            $server->username,
-            $server->password,
-            $server->port
-        );
+        $supervisor = $server->getSupervisor();
 
         // 修复定时任务状态
         $cronLogs = CronLog::find([
@@ -169,7 +156,7 @@ class CronTask extends TaskBase
                 elseif ($process_info['statename'] == 'STOPPED')
                 {
                     $cronLog->status = CronLog::STATUS_STOPPED;
-                    $cronLog->end_time = $process_info['stop'];
+                    $cronLog->end_time = $process_info['stop'] > 0 ? $process_info['stop'] : time();
                 }
                 elseif ($process_info['statename'] == 'UNKNOWN')
                 {

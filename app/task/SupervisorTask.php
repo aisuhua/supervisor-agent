@@ -61,13 +61,7 @@ class SupervisorTask extends TaskBase
                     return true;
                 }
 
-                $supervisor = new Supervisor(
-                    $server->id,
-                    $server->ip,
-                    $server->username,
-                    $server->password,
-                    $server->port
-                );
+                $supervisor = $server->getSupervisor();
 
                 try
                 {

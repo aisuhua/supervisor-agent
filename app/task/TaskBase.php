@@ -2,12 +2,9 @@
 namespace SupAgent\Task;
 
 use Phalcon\Cli\Task;
-use SupAgent\Model\Cron;
-use SupAgent\Model\CronLog;
 use SupAgent\Model\Server;
 use SupAgent\Supervisor\StatusCode;
 use SupAgent\Supervisor\Supervisor;
-use SupAgent\Lock\Cron as CronLock;
 use SupAgent\Exception\Exception;
 use Zend\XmlRpc\Client\Exception\FaultException;
 
