@@ -354,7 +354,7 @@ class CronTask extends TaskBase
                 $key = explode('_', $file)[3];
                 $cron_files[$key][] = $file;
 
-                if (count($cron_files[$key]) > Cron::LOG_SIZE)
+                if (count($cron_files[$key]) > Cron::LOG_SIZE + 1)
                 {
                     $delete_files[] = $file;
                 }
