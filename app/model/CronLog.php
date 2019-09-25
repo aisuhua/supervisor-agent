@@ -54,7 +54,7 @@ class CronLog extends Model
 
     public function getLogFile()
     {
-        return PATH_SUPERVISOR_LOG . "/{$this->program}.log";
+        return PATH_SUPERVISOR_LOG_CRON . "/{$this->program}.log";
     }
 
     public function truncate()

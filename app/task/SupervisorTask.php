@@ -108,7 +108,7 @@ class SupervisorTask extends TaskBase
         });
     }
 
-    private static function getStatusByEvent($eventData)
+    protected static function getStatusByEvent($eventData)
     {
         if ($eventData['eventname'] == 'PROCESS_STATE_EXITED')
         {

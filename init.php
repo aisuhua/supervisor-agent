@@ -23,6 +23,8 @@ define('PATH_LIBRARY', PATH_APP . '/library');
 define('PATH_SUPERVISOR', PATH_ROOT . '/supervisor');
 define('PATH_SUPERVISOR_CONFIG', PATH_SUPERVISOR . '/conf.d');
 define('PATH_SUPERVISOR_LOG', PATH_SUPERVISOR . '/log');
+define('PATH_SUPERVISOR_LOG_COMMAND', PATH_SUPERVISOR . '/log/command');
+define('PATH_SUPERVISOR_LOG_CRON', PATH_SUPERVISOR . '/log/cron');
 
 if (DEBUG_MODE)
 {

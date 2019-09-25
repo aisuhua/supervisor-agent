@@ -25,7 +25,6 @@ class Cron extends Model
     const STATUS_ACTIVE = 1;
     const STATE_INACTIVE = -1;
     const PROGRAM_PREFIX = '_supervisor_cron_';
-
     const LOG_SIZE = 5;
 
     public function initialize()
@@ -45,7 +44,7 @@ class Cron extends Model
 
     public static function getLogFile($program)
     {
-        return PATH_SUPERVISOR_LOG . "/{$program}.log";
+        return PATH_SUPERVISOR_LOG_CRON . "/{$program}.log";
     }
 
     public function getProgram($id)
