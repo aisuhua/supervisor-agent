@@ -17,7 +17,7 @@ class TaskBase extends Task
 
     protected function removeConfig(Supervisor &$supervisor, $conf_path, $program)
     {
-        $content = file_get_contents($conf_path);
+        $content = trim(file_get_contents($conf_path));
         if ($content === false)
         {
             throw new Exception("无法读取文件");
@@ -101,7 +101,18 @@ class TaskBase extends Task
 
     public function addConfig(Supervisor &$supervisor, $conf_path, $program, $ini)
     {
-        if (file_put_contents($conf_path, $ini, FILE_APPEND) === false)
+        $content = trim(file_get_contents($conf_path));
+        if ($content === false)
+        {
+            throw new Exception("无法读取文件");
+        }
+
+        if (!empty($content))
+        {
+            $ini = $content  . PHP_EOL . $ini;
+        }
+
+        if (file_put_contents($conf_path, $ini) === false)
         {
             throw new Exception("无法写入配置");
         }

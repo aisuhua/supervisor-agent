@@ -93,12 +93,14 @@ class SupervisorTask extends TaskBase
                 // $cronLog->log = (string) @file_get_contents($cronLog->getLogFile());
 
                 // 删除进程配置
-                if ($this->removeCron($supervisor, $cronLog->program))
+                if (!$this->removeCron($supervisor, $cronLog->program))
                 {
-                    $cronLog->save();
-                    $cronLog->truncate();
+                    $cronLock->unlock();
+                    return true;
                 }
 
+                $cronLog->save();
+                $cronLog->truncate();
                 $cronLock->unlock();
 
                 return true;

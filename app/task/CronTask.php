@@ -191,7 +191,7 @@ class CronTask extends TaskBase
                 $cronLog->save();
                 $cronLog->truncate();
 
-                print_cli("{$cronLog->program} fixed");
+                print_cli("{$cronLog->program} record fixed");
             }
         }
 
@@ -235,7 +235,54 @@ class CronTask extends TaskBase
                     $this->removeCron($supervisor, $process['group']);
                 }
 
-                print_cli("{$process['group']} removed");
+                print_cli("{$process['group']} process removed");
+            }
+        }
+
+        // 检查配置是否有多余的项
+        $content = trim(file_get_contents(Server::CONF_CRON));
+        if ($content === false)
+        {
+            throw new Exception("无法读取文件");
+        }
+
+        $parsed = parse_ini_string($content, true, INI_SCANNER_RAW);
+        if ($parsed === false)
+        {
+            throw new Exception("无法解析配置");
+        }
+
+        $origin = $parsed;
+        foreach ($parsed as $key => $value)
+        {
+            $program = explode(':', $key)[1];
+
+            $cronLog = CronLog::findFirst([
+                "server_id = :server_id: AND program = :program:",
+                'bind' => [
+                    'server_id' => $server_id,
+                    'program' => $program
+                ]
+            ]);
+
+            if (!$cronLog)
+            {
+                // 删除多余的配置项
+                if ($this->removeCron($supervisor, $program))
+                {
+                    unset($parsed[$key]);
+
+                    print_cli("{$program} removed from " . Server::CONF_CRON);
+                }
+            }
+        }
+
+        if (count($origin) != $parsed)
+        {
+            $ini = build_ini_string($parsed);
+            if (file_put_contents(Server::CONF_CRON, $ini) === false)
+            {
+                throw new Exception("配置写入失败");
             }
         }
 
@@ -286,9 +333,10 @@ class CronTask extends TaskBase
         {
             foreach ($delete_files as $delete_file)
             {
-                if (@unlink(PATH_SUPERVISOR_LOG . '/' . $delete_file))
+                $file_path = PATH_SUPERVISOR_LOG . '/' . $delete_file;
+                if (@unlink($file_path))
                 {
-                    print_cli("{$delete_file} deleted");
+                    print_cli("{$file_path} deleted");
                 }
             }
         }
