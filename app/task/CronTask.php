@@ -25,7 +25,7 @@ class CronTask extends TaskBase
 
         $server_id = (int) $params[0];
 
-        // 修复进程状态
+        // 执行一些清理工作
         $this->clearAction($server_id);
 
         $loop = EventLoop::create();
@@ -339,7 +339,7 @@ class CronTask extends TaskBase
      *
      * @param Server $server
      */
-    public function clearLog(Server &$server)
+    protected function clearLog(Server &$server)
     {
         $server_id = $server->id;
 

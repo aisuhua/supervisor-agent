@@ -15,12 +15,21 @@ class TaskBase extends Task
         return $this->removeConfig($supervisor, Server::CONF_CRON, $program);
     }
 
+    protected function removeCommand(Supervisor &$supervisor, $program)
+    {
+        return $this->removeConfig($supervisor, Server::CONF_COMMAND, $program);
+    }
+
     protected function removeConfig(Supervisor &$supervisor, $conf_path, $program)
     {
-        $content = trim(file_get_contents($conf_path));
-        if ($content === false)
+        $content = '';
+        if (file_exists($conf_path))
         {
-            throw new Exception("无法读取文件");
+            $content = trim(file_get_contents($conf_path));
+            if ($content === false)
+            {
+                throw new Exception("无法读取文件");
+            }
         }
 
         if (!empty($content))
@@ -101,15 +110,19 @@ class TaskBase extends Task
 
     public function addConfig(Supervisor &$supervisor, $conf_path, $program, $ini)
     {
-        $content = trim(file_get_contents($conf_path));
-        if ($content === false)
+        $content = '';
+        if (file_exists($conf_path))
         {
-            throw new Exception("无法读取文件");
+            $content = trim(file_get_contents($conf_path));
+            if ($content === false)
+            {
+                throw new Exception("无法读取文件");
+            }
         }
 
         if (!empty($content))
         {
-            $ini = $content  . PHP_EOL . $ini;
+            $ini = $content  . PHP_EOL . $ini . PHP_EOL;
         }
 
         if (file_put_contents($conf_path, $ini) === false)

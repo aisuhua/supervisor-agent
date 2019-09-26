@@ -3,11 +3,13 @@ namespace SupAgent\Task;
 
 use Mtdowling\Supervisor\EventListener;
 use Mtdowling\Supervisor\EventNotification;
+use SupAgent\Model\Command;
 use SupAgent\Model\Cron;
 use SupAgent\Supervisor\Supervisor;
 use SupAgent\Model\CronLog;
 use Zend\XmlRpc\Client\Exception\FaultException;
 use SupAgent\Lock\Cron as CronLock;
+use SupAgent\Lock\Command as CommandLock;
 
 class SupervisorTask extends TaskBase
 {
@@ -25,11 +27,6 @@ class SupervisorTask extends TaskBase
             $listener->log(var_export($event->getData(), true));
 
             $eventData = $event->getData();
-            if (!Cron::isCron($eventData['groupname']))
-            {
-                // 只处理定时任务事件
-                return true;
-            }
 
             if (Cron::isCron($eventData['groupname']))
             {
@@ -90,8 +87,6 @@ class SupervisorTask extends TaskBase
                     $cronLog->start_time = $process_info['start'];
                 }
 
-                // $cronLog->log = (string) @file_get_contents($cronLog->getLogFile());
-
                 // 删除进程配置
                 if (!$this->removeCron($supervisor, $cronLog->program))
                 {
@@ -105,6 +100,80 @@ class SupervisorTask extends TaskBase
 
                 return true;
             }
+            elseif (Command::isCommand($eventData['groupname']))
+            {
+                $commandLock = new CommandLock();
+                $commandLock->lock();
+
+                /** @var Command $command */
+                $command = Command::findFirst([
+                    'program = :program:',
+                    'bind' => [
+                        'program' => $eventData['groupname']
+                    ]
+                ]);
+
+                if (!$command)
+                {
+                    $listener->log("该命令执行记录不存在");
+                    $commandLock->unlock();
+
+                    return true;
+                }
+
+                /** @var \SupAgent\Model\Server $server */
+                $server = $command->getServer();
+                if (!$server)
+                {
+                    $listener->log("服务器不存在");
+                    $commandLock->unlock();
+
+                    return true;
+                }
+
+                $supervisor = $server->getSupervisor();
+
+                try
+                {
+                    $process_info = $supervisor->getProcessInfo($command->getProcessName());
+                }
+                catch (FaultException $e) {}
+
+                // 开始事件
+                if ($eventData['eventname'] == 'PROCESS_STATE_STARTING')
+                {
+                    $command->status = Command::STATUS_STARTED;
+                    $command->start_time = empty($process_info['start']) ? time() : $process_info['start'];
+                    $command->save();
+                    $commandLock->unlock();
+
+                    return true;
+                }
+
+                // 结束事件
+                $command->status = self::getStatusByEvent($eventData);
+                $command->end_time = empty($process_info['stop']) ? time() : $process_info['stop'];
+
+                // 如果有则以最后的时间为准
+                if (!empty($process_info['start']))
+                {
+                    $command->start_time = $process_info['start'];
+                }
+
+                // 删除进程配置
+                if (!$this->removeCommand($supervisor, $command->program))
+                {
+                    $commandLock->unlock();
+                    return true;
+                }
+
+                $command->save();
+                $commandLock->unlock();
+
+                return true;
+            }
+
+            return true;
         });
     }
 

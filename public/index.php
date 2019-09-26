@@ -7,6 +7,8 @@ use Phalcon\Mvc\Micro;
 use SupAgent\Model\CronLog;
 use SupAgent\Model\Process;
 use SupAgent\Model\Server;
+use SupAgent\Model\Command;
+use SupAgent\Lock\Command as CommandLock;
 
 require __DIR__ . '/../init.php';
 
@@ -61,7 +63,6 @@ $app->get('/process/reload/{server_id:[0-9]+}', function ($server_id) use ($app)
     {
         $result['state'] = 0;
         $result['message'] = "该服务器不存在";
-
         return $app->response->setJsonContent($result);
     }
 
@@ -85,18 +86,63 @@ $app->get('/process/reload/{server_id:[0-9]+}', function ($server_id) use ($app)
     {
         $result['state'] = 0;
         $result['message'] = "配置更新失败";
-
         return $app->response->setJsonContent($result);
     }
 
     $result['state'] = 1;
     $result['message'] = "配置更新成功";
-
     return $app->response->setJsonContent($result);
 });
 
-$app->get('/command/reload/{server_id:[0-9]+}', function($server_id) {
+// 更新命令配置
+$app->get('/command/reload/{server_id:[0-9]+}/{id:[0-9]+}', function($server_id, $id) use ($app) {
+    $server = Server::findFirst($server_id);
+    if (!$server)
+    {
+        $result['state'] = 0;
+        $result['message'] = "该服务器不存在";
+        return $app->response->setJsonContent($result);
+    }
 
+    $cronLock = new CommandLock();
+    $cronLock->lock();
+
+    $content = '';
+    if (file_exists(Server::CONF_COMMAND))
+    {
+        if (($content = file_get_contents(Server::CONF_COMMAND)) == false)
+        {
+            $result['state'] = 0;
+            $result['message'] = "无法读取配置";
+            return $app->response->setJsonContent($result);
+        }
+    }
+
+    /** @var Command $command */
+    $command = Command::findFirst($id);
+    if (!$command)
+    {
+        $result['state'] = 0;
+        $result['message'] = "该命令不存在";
+        return $app->response->setJsonContent($result);
+    }
+
+    $ini = $command->getIni();
+    if ($content)
+    {
+        $ini = trim($content)  . PHP_EOL . $ini . PHP_EOL;
+    }
+
+    if (file_put_contents(Server::CONF_COMMAND, $ini) === false)
+    {
+        $result['state'] = 0;
+        $result['message'] = "配置更新失败";
+        return $app->response->setJsonContent($result);
+    }
+
+    $result['state'] = 1;
+    $result['message'] = "配置更新成功";
+    return $app->response->setJsonContent($result);
 });
 
 // 读取定时任务或命令的日志

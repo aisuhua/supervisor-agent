@@ -69,11 +69,8 @@ class Cron extends Model
         $ini .= "redirect_stderr=true" . PHP_EOL;
         $ini .= "stdout_logfile=" . self::getLogFile($program) . PHP_EOL;
         $ini .= "stdout_logfile_backups=0" . PHP_EOL;
-        $ini .= "stdout_logfile_maxbytes=50MB" . PHP_EOL;
+        $ini .= "stdout_logfile_maxbytes=50MB";
 
         return $ini;
     }
-
-
-
 }
