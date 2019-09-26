@@ -42,19 +42,13 @@ $app->get('/cron-log/log/{id}/{file_size}', function ($id, $file_size) use ($app
     $cronLog = CronLog::findFirst($id);
     if (!$cronLog)
     {
-        $result['state'] = 0;
-        $result['message'] = "该日志不存在";
-
-        return $app->response->setJsonContent($result);
+        exit();
     }
 
     $log_file = $cronLog->getLogFile();
     if (!file_exists($log_file))
     {
-        $result['state'] = 0;
-        $result['message'] = "该日志不存在或已经被删除";
-
-        return $app->response->setJsonContent($result);
+        exit();
     }
 
     if ($file_size == 0)
@@ -71,7 +65,5 @@ $app->get('/cron-log/log/{id}/{file_size}', function ($id, $file_size) use ($app
     echo frread($fp, $file_size);
     exit();
 });
-
-
 
 $app->handle();
