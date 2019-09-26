@@ -5,39 +5,102 @@
 
 use Phalcon\Mvc\Micro;
 use SupAgent\Model\CronLog;
+use SupAgent\Model\Process;
+use SupAgent\Model\Server;
 
 require __DIR__ . '/../init.php';
 
 $app = new Micro($di);
 
-/**
- * 重新生成进程配置
- * 1. 读取进程信息，将进程配置拼接成 ini，写入 process.conf 文件
- * 2. 调动 Supervisor reloadConfig 方法，更新进程状态
- * 3. 返回 added/changed/removed
- */
-$app->get('/process/reload/{server_id}', function ($server_id) {
-    echo $server_id, PHP_EOL;
+// 前置检查
+$app->before(function () use ($app) {
+    $route = $app->router->getMatchedRoute();
+    if ($route->getName() == 'state')
+    {
+        return true;
+    }
+
+    $auth = $app->request->get('auth');
+    $time = $app->request->get('time');
+    $uri = urldecode(parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH));
+
+    if (empty($auth) ||
+        empty($time) ||
+        time() - $time > $GLOBALS['api']['expired'] ||
+        md5($_SERVER['HTTP_HOST'] . $uri . $time . $GLOBALS['api']['key']) != $auth)
+    {
+        if ($route->getName() == 'tail-cron-log')
+        {
+            exit();
+        }
+
+        $result['state'] = 0;
+        $result['message'] = "签名错误";
+        $app->response->setJsonContent($result)->send();
+        $app->stop();
+
+        return false;
+    }
+
+    return true;
 });
 
-/**
- * 重新生成命令配置
- * 1. 读取命令信息，将命令进程拼接成 ini，写入 command.conf 文件
- * 2. 调用 Supervisor reloadConfig 方法，更新进程状态
- * 3. 返回 added/changed/removed
- */
-$app->get('/command/reload/{server_id}', function($server_id) {
+// 查看服务状态
+$app->get('/state', function() use ($app) {
+    $result['state'] = 1;
+    $result['message'] = "RUNNING";
+    return $app->response->setJsonContent($result);
+})->setName('state');
 
-});
-
-/**
- * 读取定时任务或命令日志
- * @param $id
- * @return mixed
- */
-$app->get('/cron-log/log/{id}/{file_size}', function ($id, $file_size) use ($app) {
+// 重新加载进程配置
+$app->get('/process/reload/{server_id:[0-9]+}', function ($server_id) use ($app) {
     $result = [];
 
+    $server = Server::findFirst($server_id);
+    if (!$server)
+    {
+        $result['state'] = 0;
+        $result['message'] = "该服务器不存在";
+
+        return $app->response->setJsonContent($result);
+    }
+
+    $processes = Process::find([
+        'server_id = :server_id:',
+        'bind' => [
+            'server_id' => $server_id
+        ],
+        'order' => 'program asc, id asc'
+    ]);
+
+    $ini_arr = [];
+    foreach ($processes as $process)
+    {
+        /** @var Process $process */
+        $ini_arr[] = $process->getIni();
+    }
+
+    $ini = implode(PHP_EOL, $ini_arr) . PHP_EOL;
+    if (file_put_contents(Server::CONF_PROCESS, $ini) === false)
+    {
+        $result['state'] = 0;
+        $result['message'] = "配置更新失败";
+
+        return $app->response->setJsonContent($result);
+    }
+
+    $result['state'] = 1;
+    $result['message'] = "配置更新成功";
+
+    return $app->response->setJsonContent($result);
+});
+
+$app->get('/command/reload/{server_id:[0-9]+}', function($server_id) {
+
+});
+
+// 读取定时任务或命令的日志
+$app->get('/cron-log/tail/{id:[0-9]+}/{file_size:[0-9]+}', function ($id, $file_size) use ($app) {
     /** @var CronLog $cronLog */
     $cronLog = CronLog::findFirst($id);
     if (!$cronLog)
@@ -64,6 +127,6 @@ $app->get('/cron-log/log/{id}/{file_size}', function ($id, $file_size) use ($app
     $fp = fopen($log_file, 'r');
     echo frread($fp, $file_size);
     exit();
-});
+})->setName('tail-cron-log');
 
 $app->handle();
