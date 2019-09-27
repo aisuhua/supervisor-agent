@@ -58,11 +58,12 @@ class Command extends ProcessAbstract
         return strpos($program, self::PROGRAM_PREFIX) === 0;
     }
 
-    public static function truncate()
+    public function truncate()
     {
-        $commands = Command::find([
-            "status IN ({status:array})",
+        $commands = self::find([
+            "server_id = :server_id: AND status IN ({status:array})",
             'bind' => [
+                'server_id' => $this->server_id,
                 'status' => [
                     self::STATUS_FINISHED,
                     self::STATUS_STOPPED,

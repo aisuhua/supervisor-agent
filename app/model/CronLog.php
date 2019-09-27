@@ -61,7 +61,7 @@ class CronLog extends ProcessAbstract
 
     public function truncate()
     {
-        $cronLogs= CronLog::find([
+        $cronLogs= self::find([
             "cron_id = :cron_id: AND status IN ({status:array})",
             'bind' => [
                 'cron_id' => $this->cron_id,

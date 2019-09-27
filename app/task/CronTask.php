@@ -401,7 +401,7 @@ class CronTask extends TaskBase
         {
             if (CronLog::isCron($file))
             {
-                $key = explode('_', $file)[3];
+                $key = (int) explode('_', $file)[3];
                 $cron_files[$key][] = $file;
 
                 if (count($cron_files[$key]) > Cron::LOG_SIZE + 1)
@@ -413,18 +413,18 @@ class CronTask extends TaskBase
 
         if (!empty($cron_files))
         {
-            $cron_ids = array_keys($cron_files);
+            $log_ids = array_keys($cron_files);
 
-            $cron = Cron::find([
+            $cronLogs = CronLog::find([
                 'server_id = :server_id: AND id IN({ids:array})',
                 'bind' => [
                     'server_id' => $server->id,
-                    'ids' => $cron_ids
+                    'ids' => $log_ids
                 ],
                 'columns' => 'id'
             ]);
 
-            $delete_ids = array_diff($cron_ids, array_column($cron->toArray(), 'id'));
+            $delete_ids = array_diff($log_ids, array_column($cronLogs->toArray(), 'id'));
             if (!empty($delete_ids))
             {
                 foreach ($delete_ids as $delete_id)
@@ -447,7 +447,6 @@ class CronTask extends TaskBase
         }
 
         // 清理过多的日志
-        Command::truncate();
 
         // 删除日志文件
     }
