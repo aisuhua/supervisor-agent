@@ -5,10 +5,8 @@ use Phalcon\Mvc\Model;
 
 /**
  * Class CronLog
- *
- * @method Server getServer()
  */
-class CronLog extends Model
+class CronLog extends ProcessAbstract
 {
     public $id;
     public $cron_id;
@@ -17,17 +15,11 @@ class CronLog extends Model
     public $command;
     public $start_time;
     public $end_time;
-    public $log;
     public $status;
     public $update_time;
     public $create_time;
 
-    const STATUS_INI = 0; // 初始化状态
-    const STATUS_STARTED = 1; // 已启动
-    const STATUS_FINISHED = 2; // 已正常完成
-    const STATUS_FAILED = -1; // 没有正常退出
-    const STATUS_UNKNOWN = -2; // 无法确定进程的执行状态
-    const STATUS_STOPPED = -3; // 被中断
+    const PROGRAM_PREFIX = '_supervisor_cron_';
 
     public function initialize()
     {
@@ -47,14 +39,24 @@ class CronLog extends Model
         $this->update_time = time();
     }
 
-    public function getProcessName()
+    public function getServer()
     {
-        return $this->program . ':' . $this->program . '_0';
+        return $this->getRelated('server');
+    }
+
+    public function getProgram()
+    {
+        return self::PROGRAM_PREFIX . $this->id;
     }
 
     public function getLogFile()
     {
         return PATH_SUPERVISOR_LOG_CRON . "/{$this->program}.log";
+    }
+
+    public static function getPathConf()
+    {
+        return PATH_SUPERVISOR_CONF . '/cron.conf';
     }
 
     public function truncate()
@@ -84,5 +86,10 @@ class CronLog extends Model
                 $cronLog->delete();
             }
         }
+    }
+
+    public static function isCron($program)
+    {
+        return strpos($program, self::PROGRAM_PREFIX) === 0;
     }
 }

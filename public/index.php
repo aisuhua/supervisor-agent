@@ -81,7 +81,7 @@ $app->get('/process/reload/{server_id:[0-9]+}', function ($server_id) use ($app)
         $ini .= $process->getIni() . PHP_EOL;
     }
 
-    if (file_put_contents(Server::CONF_PROCESS, $ini) === false)
+    if (file_put_contents(CronLog::getPathConf(), $ini) === false)
     {
         $result['state'] = 0;
         $result['message'] = "配置更新失败";
@@ -107,9 +107,9 @@ $app->get('/command/reload/{server_id:[0-9]+}/{id:[0-9]+}', function($server_id,
     $commandLock->lock();
 
     $content = '';
-    if (file_exists(Server::CONF_COMMAND))
+    if (file_exists(Command::getPathConf()))
     {
-        if (($content = file_get_contents(Server::CONF_COMMAND)) === false)
+        if (($content = file_get_contents(Command::getPathConf())) === false)
         {
             $commandLock->unlock();
             $result['state'] = 0;
@@ -134,7 +134,7 @@ $app->get('/command/reload/{server_id:[0-9]+}/{id:[0-9]+}', function($server_id,
         $ini = trim($content)  . PHP_EOL . trim($ini) . PHP_EOL;
     }
 
-    if (file_put_contents(Server::CONF_COMMAND, $ini) === false)
+    if (file_put_contents(Command::getPathConf(), $ini) === false)
     {
         $commandLock->unlock();
         $result['state'] = 0;

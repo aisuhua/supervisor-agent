@@ -23,10 +23,6 @@ class Server extends Model
 
     private $supervisor = null;
 
-    const CONF_CRON = PATH_SUPERVISOR_CONF . '/cron.conf';
-    const CONF_COMMAND = PATH_SUPERVISOR_CONF . '/command.conf';
-    const CONF_PROCESS = PATH_SUPERVISOR_CONF . '/process.conf';
-
     /**
      * @param bool $reusable
      *

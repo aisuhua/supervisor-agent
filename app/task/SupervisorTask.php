@@ -10,6 +10,7 @@ use SupAgent\Model\CronLog;
 use Zend\XmlRpc\Client\Exception\FaultException;
 use SupAgent\Lock\Cron as CronLock;
 use SupAgent\Lock\Command as CommandLock;
+use SupAgent\Model\ProcessAbstract;
 
 class SupervisorTask extends TaskBase
 {
@@ -28,7 +29,7 @@ class SupervisorTask extends TaskBase
 
             $eventData = $event->getData();
 
-            if (Cron::isCron($eventData['groupname']))
+            if (CronLog::isCron($eventData['groupname']))
             {
                 $cronLock = new CronLock();
 
@@ -48,56 +49,11 @@ class SupervisorTask extends TaskBase
                     return true;
                 }
 
-                /** @var \SupAgent\Model\Server $server */
-                $server = $cronLog->getServer();
-                if (!$server)
-                {
-                    $listener->log("服务器不存在");
-                    $cronLock->unlock();
-
-                    return true;
-                }
-
-                $supervisor = $server->getSupervisor();
-
-                try
-                {
-                    $process_info = $supervisor->getProcessInfo($cronLog->getProcessName());
-                }
-                catch (FaultException $e) {}
-
-                // 开始事件
-                if ($eventData['eventname'] == 'PROCESS_STATE_STARTING')
-                {
-                    $cronLog->status = CronLog::STATUS_STARTED;
-                    $cronLog->start_time = empty($process_info['start']) ? time() : $process_info['start'];
-                    $cronLog->save();
-                    $cronLock->unlock();
-
-                    return true;
-                }
-
-                // 结束事件
-                $cronLog->status = self::getStatusByEvent($eventData);
-                $cronLog->end_time = empty($process_info['stop']) ? time() : $process_info['stop'];
-
-                // 如果有则以最后的时间为准
-                if (!empty($process_info['start']))
-                {
-                    $cronLog->start_time = $process_info['start'];
-                }
-
-                // 删除进程配置
-                if (!$this->removeCron($supervisor, $cronLog->program))
-                {
-                    $cronLock->unlock();
-                    return true;
-                }
-
-                $cronLog->save();
+                $success = $this->handleProcess($cronLog, $eventData, $listener);
+                $cronLog->truncate();
                 $cronLock->unlock();
 
-                return true;
+                return $success;
             }
             elseif (Command::isCommand($eventData['groupname']))
             {
@@ -120,84 +76,88 @@ class SupervisorTask extends TaskBase
                     return true;
                 }
 
-                /** @var \SupAgent\Model\Server $server */
-                $server = $command->getServer();
-                if (!$server)
-                {
-                    $listener->log("服务器不存在");
-                    $commandLock->unlock();
-
-                    return true;
-                }
-
-                $supervisor = $server->getSupervisor();
-
-                try
-                {
-                    $process_info = $supervisor->getProcessInfo($command->getProcessName());
-                }
-                catch (FaultException $e) {}
-
-                // 开始事件
-                if ($eventData['eventname'] == 'PROCESS_STATE_STARTING')
-                {
-                    $command->status = Command::STATUS_STARTED;
-                    $command->start_time = empty($process_info['start']) ? time() : $process_info['start'];
-                    $command->save();
-                    $commandLock->unlock();
-
-                    return true;
-                }
-
-                // 结束事件
-                $command->status = self::getStatusByEvent($eventData);
-                $command->end_time = empty($process_info['stop']) ? time() : $process_info['stop'];
-
-                // 如果有则以最后的时间为准
-                if (!empty($process_info['start']))
-                {
-                    $command->start_time = $process_info['start'];
-                }
-
-                // 删除进程配置
-                if (!$this->removeCommand($supervisor, $command->program))
-                {
-                    $commandLock->unlock();
-                    return true;
-                }
-
-                $command->save();
+                $success = $this->handleProcess($command, $eventData, $listener);
                 $commandLock->unlock();
 
-                return true;
+                return $success;
             }
 
             return true;
         });
     }
 
+    protected function handleProcess(ProcessAbstract $process, $eventData, EventListener $listener)
+    {
+        $server = $process->getServer();
+        if (!$server)
+        {
+            $listener->log("服务器不存在");
+            return true;
+        }
+
+        $supervisor = $server->getSupervisor();
+
+        try
+        {
+            $process_info = $supervisor->getProcessInfo($process->getProcessName());
+        }
+        catch (FaultException $e) {}
+
+        $status = self::getStatusByEvent($eventData);
+
+        // 开始事件
+        if ($status == ProcessAbstract::STATUS_STARTED)
+        {
+            $process->status = ProcessAbstract::STATUS_STARTED;
+            $process->start_time = empty($process_info['start']) ? time() : $process_info['start'];
+            $process->save();
+            return true;
+        }
+
+        // 结束事件
+        $process->status = $status;
+        $process->end_time = empty($process_info['stop']) ? time() : $process_info['stop'];
+
+        // 如果有则以最后的时间为准
+        if (!empty($process_info['start']))
+        {
+            $process->start_time = $process_info['start'];
+        }
+
+        // 删除进程配置
+        $supervisor->removeProcess($process->getPathConf(), $process->program);
+
+        // 保存进程最终状态
+        return $process->save();
+    }
+
     protected static function getStatusByEvent($eventData)
     {
+        if ($eventData['eventname'] == 'PROCESS_STATE_STARTING')
+        {
+            return ProcessAbstract::STATUS_STARTED;
+        }
+
         if ($eventData['eventname'] == 'PROCESS_STATE_EXITED')
         {
             if ($eventData['expected'] == 1)
             {
-                return CronLog::STATUS_FINISHED;
+                return ProcessAbstract::STATUS_FINISHED;
             }
 
-            return CronLog::STATUS_FAILED;
+            return ProcessAbstract::STATUS_FAILED;
         }
 
         if ($eventData['eventname'] == 'PROCESS_STATE_STOPPED')
         {
-            return CronLog::STATUS_STOPPED;
+            return ProcessAbstract::STATUS_STOPPED;
         }
 
         if ($eventData['eventname'] == 'PROCESS_STATE_UNKNOWN')
         {
-            return CronLog::STATUS_UNKNOWN;
+            return ProcessAbstract::STATUS_UNKNOWN;
         }
 
-        return CronLog::STATUS_FAILED;
+        return ProcessAbstract::STATUS_FAILED;
     }
 }

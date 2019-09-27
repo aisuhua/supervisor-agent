@@ -1,9 +1,11 @@
 <?php
 namespace SupAgent\Task;
 
+use SupAgent\Model\Command;
 use SupAgent\Model\Cron;
 use SupAgent\Model\CronLog;
 use Cron\CronExpression;
+use SupAgent\Model\ProcessAbstract;
 use SupAgent\Model\Server;
 use SupAgent\Supervisor\StatusCode;
 use React\EventLoop\Factory as EventLoop;
@@ -11,6 +13,7 @@ use SupAgent\Exception\Exception;
 use SupAgent\Supervisor\Supervisor;
 use Zend\XmlRpc\Client\Exception\FaultException;
 use SupAgent\Lock\Cron as CronLock;
+use SupAgent\Lock\Command as CommandLock;
 
 class CronTask extends TaskBase
 {
@@ -75,15 +78,16 @@ class CronTask extends TaskBase
                     $cronLog->cron_id = $cron->id;
                     $cronLog->server_id = $cron->server_id;
                     $cronLog->command = $cron->command;
+                    $cronLog->user = $cron->user;
                     $cronLog->status = CronLog::STATUS_INI;
                     $cronLog->create();
 
-                    $program = $cron->getProgram($cronLog->id);
                     $cronLog->refresh();
+                    $program = $cronLog->getProgram();
                     $cronLog->program = $program;
                     $cronLog->save();
 
-                    $this->addCron($supervisor, $program, $cron->getIni($program));
+                    $supervisor->addProcess(CronLog::getPathConf(), $program, $cronLog->getIni());
 
                     // 更新上次执行时间
                     $cron->last_time = $now->format('U');
@@ -110,6 +114,8 @@ class CronTask extends TaskBase
         // 锁定操作
         $cronLock = new CronLock();
         $cronLock->lock();
+        $commandLock = new CommandLock();
+        $commandLock->lock();
 
         /** @var \SupAgent\Model\Server $server */
         $server = Server::findFirst($server_id);
@@ -118,31 +124,30 @@ class CronTask extends TaskBase
             throw new Exception('该服务器不存在');
         }
 
-        $supervisor = $server->getSupervisor();
-
-        $this->clearCronLog($server, $supervisor);
-        $this->clearProcess($server, $supervisor);
-        $this->clearConfig($server, $supervisor);
+        $this->fixState($server);
+        $this->clearProcess($server);
+        $this->clearConfig($server, CronLog::getPathConf());
+        $this->clearConfig($server, Command::getPathConf());
         $this->clearLog($server);
 
         $cronLock->unlock();
+        $commandLock->unlock();
     }
 
     /**
      * 清理不一致的定时任务日志
      *
      * @param Server $server
-     * @param Supervisor $supervisor
      */
-    protected function clearCronLog(Server &$server, Supervisor &$supervisor)
+    protected function fixState(Server &$server)
     {
-        $server_id = $server->id;
+        $supervisor = $server->getSupervisor();
 
-        // 修复定时任务状态
+        // 定时任务
         $cronLogs = CronLog::find([
             'server_id = :server_id: AND status IN({status:array})',
             'bind' => [
-                'server_id' => $server_id,
+                'server_id' => $server->id,
                 'status' => [
                     CronLog::STATUS_INI,
                     CronLog::STATUS_STARTED
@@ -153,90 +158,93 @@ class CronTask extends TaskBase
         /** @var CronLog $cronLog */
         foreach ($cronLogs as $cronLog)
         {
-            try
+            self::fixProcessState($supervisor, $cronLog);
+        }
+
+        // 执行命令
+        $commands = Command::find([
+            'server_id = :server_id: AND status IN({status:array})',
+            'bind' => [
+                'server_id' => $server->id,
+                'status' => [
+                    CronLog::STATUS_INI,
+                    CronLog::STATUS_STARTED
+                ]
+            ]
+        ]);
+
+        /** @var Command $command */
+        foreach ($commands as $command)
+        {
+            self::fixProcessState($supervisor, $command);
+        }
+    }
+
+    private function fixProcessState(Supervisor &$supervisor, ProcessAbstract $process)
+    {
+        try
+        {
+            // 有可能不存在
+            $process_info = $supervisor->getProcessInfo($process->getProcessName());
+
+            $status = ProcessAbstract::getStateByProcessInfo($process_info);
+            if ($status == ProcessAbstract::STATUS_STARTED)
             {
-                // 有可能不存在
-                $process_info = $supervisor->getProcessInfo($cronLog->getProcessName());
-
-                if (in_array($process_info['statename'], ['STARTING', 'RUNNING', 'STOPPING']))
-                {
-                    continue;
-                }
-
-                // 停止后还没有超过10秒则跳过
-                if ($process_info['stop'] > 0 &&  time() - $process_info['stop'] < 10)
-                {
-                    continue;
-                }
-
-                // 处理进程已退出的几种情况
-                if ($process_info['statename'] == 'EXITED')
-                {
-                    $cronLog->status = $process_info['exitstatus'] == 0 ?
-                        CronLog::STATUS_FINISHED :
-                        CronLog::STATUS_FAILED;
-                    $cronLog->end_time = $process_info['stop'];
-                }
-                elseif ($process_info['statename'] == 'STOPPED')
-                {
-                    $cronLog->status = CronLog::STATUS_STOPPED;
-                    $cronLog->end_time = $process_info['stop'] > 0 ? $process_info['stop'] : time();
-                }
-                elseif ($process_info['statename'] == 'UNKNOWN')
-                {
-                    $cronLog->status = CronLog::STATUS_UNKNOWN;
-                    $cronLog->end_time = $process_info['stop'];
-                }
-                elseif (in_array($process_info['statename'], ['FATAL']))
-                {
-                    $cronLog->status = CronLog::STATUS_FAILED;
-                    $cronLog->end_time = $process_info['stop'];
-                }
-
-                // 以最后状态时间为准
-                if ($process_info['start'] > 0)
-                {
-                    $cronLog->start_time = $process_info['start'];
-                }
-            }
-            catch (FaultException $e)
-            {
-                if ($e->getCode() != StatusCode::BAD_NAME)
-                {
-                    throw $e;
-                }
-
-                // 进程不存在
-                $cronLog->status = CronLog::STATUS_UNKNOWN;
-                $cronLog->end_time = time();
+                return true;
             }
 
-            if ($this->removeCron($supervisor, $cronLog->program))
+            // 停止后还没有超过10秒则跳过
+            if ($process_info['stop'] > 0 &&  time() - $process_info['stop'] < 10)
             {
-                $cronLog->save();
-                $cronLog->truncate();
+                return true;
+            }
 
-                print_cli("{$cronLog->program} record fixed");
+            $process->status = $status;
+            $process->end_time = $process_info['stop'] > 0 ? $process_info['stop'] : time();
+
+            // 以最后状态时间为准
+            if ($process_info['start'] > 0)
+            {
+                $process->start_time = $process_info['start'];
             }
         }
+        catch (FaultException $e)
+        {
+            if ($e->getCode() != StatusCode::BAD_NAME)
+            {
+                throw $e;
+            }
+
+            // 进程不存在
+            $process->status = ProcessAbstract::STATUS_UNKNOWN;
+            $process->end_time = time();
+        }
+
+        /** @var ProcessAbstract $class */
+        $class = get_class($process);
+        $supervisor->removeProcess($class::getPathConf(), $process->program);
+
+        $process->save();
+
+        print_cli("{$process->program} record fixed");
     }
 
     /**
      * 清理僵尸进程
      *
      * @param Server $server
-     * @param Supervisor $supervisor
      */
-    protected function clearProcess(Server &$server, Supervisor &$supervisor)
+    protected function clearProcess(Server &$server)
     {
-        $server_id = $server->id;
+        $supervisor = $server->getSupervisor();
 
         // 修复进程状态
         $processes = $supervisor->getAllProcessInfo();
 
         foreach ($processes as $process)
         {
-            if (in_array($process['statename'], ['STARTING', 'RUNNING', 'STOPPING']))
+            $status = ProcessAbstract::getStateByProcessInfo($process);
+            if ($status == ProcessAbstract::STATUS_STARTED)
             {
                 continue;
             }
@@ -247,27 +255,57 @@ class CronTask extends TaskBase
                 continue;
             }
 
-            if (Cron::isCron($process['group']))
+            // 删除没有任何对应记录的已完成的进程
+            if (CronLog::isCron($process['group']))
             {
+                /** @var CronLog $cronLog */
                 $cronLog = CronLog::findFirst([
                     'server_id = :server_id: AND program = :program:',
                     'bind' => [
-                        'server_id' => $server_id,
+                        'server_id' => $server->id,
                         'program' => $process['group']
                     ]
                 ]);
 
                 if (!$cronLog)
                 {
-                    // 进程找不到对应的记录则删除
-                    $this->removeCron($supervisor, $process['group']);
+                    $supervisor->removeProcess(CronLog::getPathConf(), $process['group']);
                     @unlink($process['stdout_logfile']);
                 }
                 else
                 {
-                    // 如果存在记录则表明该记录状态已经是已完成
-                    // 删除该进程
-                    $this->removeCron($supervisor, $process['group']);
+                    if ($cronLog->hasFinished())
+                    {
+                        $supervisor->removeProcess(CronLog::getPathConf(), $process['group']);
+                        @unlink($process['stdout_logfile']);
+                    }
+                }
+
+                print_cli("{$process['group']} process removed");
+            }
+            elseif (Command::isCommand($process['group']))
+            {
+                /** @var Command $command */
+                $command = Command::findFirst([
+                    'server_id = :server_id: AND program = :program:',
+                    'bind' => [
+                        'server_id' => $server->id,
+                        'program' => $process['group']
+                    ]
+                ]);
+
+                if (!$command)
+                {
+                    $supervisor->removeProcess(Command::getPathConf(), $process['group']);
+                    @unlink($process['stdout_logfile']);
+                }
+                else
+                {
+                    if ($command->hasFinished())
+                    {
+                        $supervisor->removeProcess(Command::getPathConf(), $process['group']);
+                        @unlink($process['stdout_logfile']);
+                    }
                 }
 
                 print_cli("{$process['group']} process removed");
@@ -275,19 +313,12 @@ class CronTask extends TaskBase
         }
     }
 
-    /**
-     * 清理不一致的配置
-     *
-     * @param Server $server
-     * @param Supervisor $supervisor
-     * @throws Exception
-     */
-    protected function clearConfig(Server &$server, Supervisor &$supervisor)
+    protected function clearConfig(Server &$server, $conf_path)
     {
-        $server_id = $server->id;
+        $supervisor = $server->getSupervisor();
 
         // 检查配置是否有多余的项
-        $content = trim(file_get_contents(Server::CONF_CRON));
+        $content = trim(file_get_contents($conf_path));
         if ($content === false)
         {
             throw new Exception("无法读取文件");
@@ -304,22 +335,42 @@ class CronTask extends TaskBase
         {
             $program = explode(':', $key)[1];
 
-            $cronLog = CronLog::findFirst([
-                "server_id = :server_id: AND program = :program:",
-                'bind' => [
-                    'server_id' => $server_id,
-                    'program' => $program
-                ]
-            ]);
-
-            if (!$cronLog)
+            if (CronLog::isCron($program))
             {
-                // 删除多余的配置项
-                if ($this->removeCron($supervisor, $program))
-                {
-                    unset($parsed[$key]);
+                $cronLog = CronLog::findFirst([
+                    "server_id = :server_id: AND program = :program:",
+                    'bind' => [
+                        'server_id' => $server->id,
+                        'program' => $program
+                    ]
+                ]);
 
-                    print_cli("{$program} removed from " . Server::CONF_CRON);
+                if (!$cronLog)
+                {
+                    if ($supervisor->removeProcess($conf_path, $program))
+                    {
+                        unset($parsed[$key]);
+                        print_cli("{$program} removed from {$conf_path}");
+                    }
+                }
+            }
+            elseif (Command::isCommand($program))
+            {
+                $command = Command::findFirst([
+                    "server_id = :server_id: AND program = :program:",
+                    'bind' => [
+                        'server_id' => $server->id,
+                        'program' => $program
+                    ]
+                ]);
+
+                if (!$command)
+                {
+                    if ($supervisor->removeProcess($conf_path, $program))
+                    {
+                        unset($parsed[$key]);
+                        print_cli("{$program} removed from {$conf_path}");
+                    }
                 }
             }
         }
@@ -327,7 +378,7 @@ class CronTask extends TaskBase
         if (count($origin) != $parsed)
         {
             $ini = build_ini_string($parsed);
-            if (file_put_contents(Server::CONF_CRON, $ini) === false)
+            if (file_put_contents($conf_path, $ini) === false)
             {
                 throw new Exception("配置写入失败");
             }
@@ -341,15 +392,14 @@ class CronTask extends TaskBase
      */
     protected function clearLog(Server &$server)
     {
-        $server_id = $server->id;
-
-        $delete_files = [];
+        // 清理定时任务日志文件
         $cron_files = [];
+        $delete_files = [];
 
-        $files = scandir(PATH_SUPERVISOR_LOG, 1);
+        $files = scandir(PATH_SUPERVISOR_LOG_CRON, 1);
         foreach ($files as $file)
         {
-            if (Cron::isCron($file))
+            if (CronLog::isCron($file))
             {
                 $key = explode('_', $file)[3];
                 $cron_files[$key][] = $file;
@@ -368,7 +418,7 @@ class CronTask extends TaskBase
             $cron = Cron::find([
                 'server_id = :server_id: AND id IN({ids:array})',
                 'bind' => [
-                    'server_id' => $server_id,
+                    'server_id' => $server->id,
                     'ids' => $cron_ids
                 ],
                 'columns' => 'id'
@@ -388,12 +438,17 @@ class CronTask extends TaskBase
         {
             foreach ($delete_files as $delete_file)
             {
-                $file_path = PATH_SUPERVISOR_LOG . '/' . $delete_file;
+                $file_path = PATH_SUPERVISOR_LOG_CRON . '/' . $delete_file;
                 if (@unlink($file_path))
                 {
                     print_cli("{$file_path} deleted");
                 }
             }
         }
+
+        // 清理过多的日志
+        Command::truncate();
+
+        // 删除日志文件
     }
 }
