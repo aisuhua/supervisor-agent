@@ -50,3 +50,19 @@ function frread($fp, $bytes)
 
     return fread($fp, $bytes);
 }
+
+function echoLog($log_file, $file_size)
+{
+    if ($file_size == 0)
+    {
+        $file_size = filesize($log_file);
+    }
+
+    if ($file_size == 0)
+    {
+        return '';
+    }
+
+    $fp = fopen($log_file, 'r');
+    echo frread($fp, $file_size);
+}

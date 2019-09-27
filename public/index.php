@@ -31,7 +31,7 @@ $app->before(function () use ($app) {
         time() - $time > $GLOBALS['api']['expired'] ||
         md5($_SERVER['HTTP_HOST'] . $uri . $time . $GLOBALS['api']['key']) != $auth)
     {
-        if ($route->getName() == 'tail-cron-log')
+        if ($route->getName() == 'tail-cron-log' || $route->getName() == 'tail-command-log')
         {
             exit();
         }
@@ -74,14 +74,13 @@ $app->get('/process/reload/{server_id:[0-9]+}', function ($server_id) use ($app)
         'order' => 'program asc, id asc'
     ]);
 
-    $ini_arr = [];
+    $ini = '';
     foreach ($processes as $process)
     {
         /** @var Process $process */
-        $ini_arr[] = $process->getIni();
+        $ini .= $process->getIni() . PHP_EOL;
     }
 
-    $ini = implode(PHP_EOL, $ini_arr) . PHP_EOL;
     if (file_put_contents(Server::CONF_PROCESS, $ini) === false)
     {
         $result['state'] = 0;
@@ -104,14 +103,15 @@ $app->get('/command/reload/{server_id:[0-9]+}/{id:[0-9]+}', function($server_id,
         return $app->response->setJsonContent($result);
     }
 
-    $cronLock = new CommandLock();
-    $cronLock->lock();
+    $commandLock = new CommandLock();
+    $commandLock->lock();
 
     $content = '';
     if (file_exists(Server::CONF_COMMAND))
     {
         if (($content = file_get_contents(Server::CONF_COMMAND)) == false)
         {
+            $commandLock->unlock();
             $result['state'] = 0;
             $result['message'] = "无法读取配置";
             return $app->response->setJsonContent($result);
@@ -122,30 +122,33 @@ $app->get('/command/reload/{server_id:[0-9]+}/{id:[0-9]+}', function($server_id,
     $command = Command::findFirst($id);
     if (!$command)
     {
+        $commandLock->unlock();
         $result['state'] = 0;
         $result['message'] = "该命令不存在";
         return $app->response->setJsonContent($result);
     }
 
-    $ini = $command->getIni();
-    if ($content)
+    $ini = $command->getIni() . PHP_EOL;
+    if (!empty($content))
     {
-        $ini = trim($content)  . PHP_EOL . $ini . PHP_EOL;
+        $ini = trim($content)  . PHP_EOL . trim($ini) . PHP_EOL;
     }
 
     if (file_put_contents(Server::CONF_COMMAND, $ini) === false)
     {
+        $commandLock->unlock();
         $result['state'] = 0;
         $result['message'] = "配置更新失败";
         return $app->response->setJsonContent($result);
     }
 
+    $commandLock->unlock();
     $result['state'] = 1;
     $result['message'] = "配置更新成功";
     return $app->response->setJsonContent($result);
 });
 
-// 读取定时任务或命令的日志
+// 读取定时任务日志
 $app->get('/cron-log/tail/{id:[0-9]+}/{file_size:[0-9]+}', function ($id, $file_size) use ($app) {
     /** @var CronLog $cronLog */
     $cronLog = CronLog::findFirst($id);
@@ -160,19 +163,27 @@ $app->get('/cron-log/tail/{id:[0-9]+}/{file_size:[0-9]+}', function ($id, $file_
         exit();
     }
 
-    if ($file_size == 0)
-    {
-        $file_size = filesize($log_file);
-    }
+    echoLog($log_file, $file_size);
+    exit();
+})->setName('tail-cron-log');
 
-    if ($file_size == 0)
+// 读取命令执行日志
+$app->get('/command-log/tail/{id:[0-9]+}/{file_size:[0-9]+}', function ($id, $file_size) use ($app) {
+    /** @var Command $command */
+    $command = Command::findFirst($id);
+    if (!$command)
     {
         exit();
     }
 
-    $fp = fopen($log_file, 'r');
-    echo frread($fp, $file_size);
+    $log_file = $command->getLogFile();
+    if (!file_exists($log_file))
+    {
+        exit();
+    }
+
+    echoLog($log_file, $file_size);
     exit();
-})->setName('tail-cron-log');
+})->setName('tail-command-log');
 
 $app->handle();

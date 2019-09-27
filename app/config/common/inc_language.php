@@ -1,3 +1,1 @@
 <?php
-
-$GLOBALS['name'] = 'suhua';

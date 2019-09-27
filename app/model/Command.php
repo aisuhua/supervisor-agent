@@ -57,9 +57,9 @@ class Command extends Model
         return $this->program . ':' . $this->program . '_0';
     }
 
-    public static function getLogFile($program)
+    public function getLogFile()
     {
-        return PATH_SUPERVISOR_LOG_COMMAND . "/{$program}.log";
+        return PATH_SUPERVISOR_LOG_COMMAND . "/{$this->program}.log";
     }
 
     public function getIni()
@@ -79,7 +79,7 @@ class Command extends Model
         $ini .= "startretries=0" . PHP_EOL;
         $ini .= "autorestart=false" . PHP_EOL;
         $ini .= "redirect_stderr=true" . PHP_EOL;
-        $ini .= "stdout_logfile={$program}" . PHP_EOL;
+        $ini .= "stdout_logfile=" . self::getLogFile() . PHP_EOL;
         $ini .= "stdout_logfile_backups=0" . PHP_EOL;
         $ini .= "stdout_logfile_maxbytes=50MB";
 

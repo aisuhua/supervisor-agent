@@ -15,7 +15,7 @@ $loader->registerNamespaces([
 ], true);
 $loader->register();
 
-// 注册服务
+// 设置默认命名空间
 $di->set('dispatcher', function () {
     $dispatcher = new Dispatcher();
     $dispatcher->setDefaultNamespace('SupAgent\Task');
