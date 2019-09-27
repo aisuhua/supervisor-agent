@@ -52,7 +52,7 @@ require PATH_CONFIG_COMMON . '/inc_language.php';
 
 // 加载环境配置
 require PATH_CONFIG_IDC . '/inc_constant.php';
-require PATH_CONFIG_IDC . '/inc_database.php';
+require PATH_CONFIG_IDC . '/inc_config.php';
 
 // 是否打开调试模式
 if (DEBUG_LEVEL)

@@ -95,7 +95,6 @@ class SupervisorTask extends TaskBase
                 }
 
                 $cronLog->save();
-                $cronLog->truncate();
                 $cronLock->unlock();
 
                 return true;

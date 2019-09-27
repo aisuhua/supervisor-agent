@@ -109,7 +109,7 @@ $app->get('/command/reload/{server_id:[0-9]+}/{id:[0-9]+}', function($server_id,
     $content = '';
     if (file_exists(Server::CONF_COMMAND))
     {
-        if (($content = file_get_contents(Server::CONF_COMMAND)) == false)
+        if (($content = file_get_contents(Server::CONF_COMMAND)) === false)
         {
             $commandLock->unlock();
             $result['state'] = 0;
