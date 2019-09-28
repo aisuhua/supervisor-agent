@@ -24,7 +24,7 @@ class Cron extends Model
 
     const STATUS_ACTIVE = 1;
     const STATE_INACTIVE = -1;
-    const LOG_SIZE = 5;
+    const LOG_SIZE = 10;
 
     public function initialize()
     {

@@ -95,7 +95,7 @@ $app->get('/process/reload/{server_id:[0-9]+}', function ($server_id) use ($app)
 });
 
 // 更新命令配置
-$app->get('/command/reload/{server_id:[0-9]+}/{id:[0-9]+}', function($server_id, $id) use ($app) {
+$app->get('/command/add/{server_id:[0-9]+}/{id:[0-9]+}', function($server_id, $id) use ($app) {
     $server = Server::findFirst($server_id);
     if (!$server)
     {
@@ -106,18 +106,6 @@ $app->get('/command/reload/{server_id:[0-9]+}/{id:[0-9]+}', function($server_id,
 
     $commandLock = new CommandLock();
     $commandLock->lock();
-
-    $content = '';
-    if (file_exists(Command::getPathConf()))
-    {
-        if (($content = file_get_contents(Command::getPathConf())) === false)
-        {
-            $commandLock->unlock();
-            $result['state'] = 0;
-            $result['message'] = "无法读取配置";
-            return $app->response->setJsonContent($result);
-        }
-    }
 
     /** @var Command $command */
     $command = Command::findFirst($id);
@@ -130,6 +118,19 @@ $app->get('/command/reload/{server_id:[0-9]+}/{id:[0-9]+}', function($server_id,
     }
 
     $ini = $command->getIni() . PHP_EOL;
+    $content = '';
+
+    if (file_exists(Command::getPathConf()))
+    {
+        if (($content = file_get_contents(Command::getPathConf())) === false)
+        {
+            $commandLock->unlock();
+            $result['state'] = 0;
+            $result['message'] = "无法读取配置";
+            return $app->response->setJsonContent($result);
+        }
+    }
+
     if (!empty($content))
     {
         $ini = trim($content)  . PHP_EOL . trim($ini) . PHP_EOL;

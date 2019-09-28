@@ -23,7 +23,7 @@ class Command extends ProcessAbstract
     public $create_time;
 
     const PROGRAM_PREFIX = '_supervisor_command_';
-    const LOG_SIZE = 5;
+    const LOG_SIZE = 10;
 
     public function initialize()
     {
