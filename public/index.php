@@ -26,6 +26,7 @@ $app->before(function () use ($app) {
     $time = $app->request->get('time');
     $uri = urldecode(parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH));
 
+    // 验证摘要 auth 是否有效
     if (empty($auth) ||
         empty($time) ||
         time() - $time > $GLOBALS['api']['expired'] ||
