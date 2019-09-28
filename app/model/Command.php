@@ -23,7 +23,7 @@ class Command extends ProcessAbstract
     public $create_time;
 
     const PROGRAM_PREFIX = '_supervisor_command_';
-    const LOG_SIZE = 100;
+    const LOG_SIZE = 5;
 
     public function initialize()
     {
@@ -45,7 +45,7 @@ class Command extends ProcessAbstract
 
     public function getLogFile()
     {
-        return PATH_SUPERVISOR_LOG_CRON . "/{$this->program}.log";
+        return PATH_SUPERVISOR_LOG_COMMAND . "/{$this->program}.log";
     }
 
     public static function getPathConf()
@@ -72,7 +72,7 @@ class Command extends ProcessAbstract
                 ]
             ],
             'order' => 'id desc',
-            'offset' => self::LOG_SIZE,
+            'offset' => self::LOG_SIZE - 1,
             'limit' => 10000
         ]);
 
@@ -85,5 +85,18 @@ class Command extends ProcessAbstract
                 $command->delete();
             }
         }
+    }
+
+    public static function parseProgram($program)
+    {
+        if (preg_match('/(' . self::PROGRAM_PREFIX . ')(\d+)/', $program, $matches))
+        {
+            return [
+                'prefix' => $matches[1],
+                'id' => $matches[2]
+            ];
+        }
+
+        return false;
     }
 }

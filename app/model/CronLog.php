@@ -27,6 +27,11 @@ class CronLog extends ProcessAbstract
             'alias' => 'server',
             'reusable' => false
         ]);
+
+        $this->belongsTo('cron_id', Cron::class, 'id', [
+            'alias' => 'cron',
+            'reusable' => false
+        ]);
     }
 
     public function beforeCreate()
@@ -44,9 +49,14 @@ class CronLog extends ProcessAbstract
         return $this->getRelated('server');
     }
 
+    public function getCron()
+    {
+        return $this->getRelated('cron');
+    }
+
     public function getProgram()
     {
-        return self::PROGRAM_PREFIX . $this->id;
+        return self::PROGRAM_PREFIX . $this->getCron()->id . '_' . $this->id;
     }
 
     public function getLogFile()
@@ -73,7 +83,7 @@ class CronLog extends ProcessAbstract
                 ]
             ],
             'order' => 'id desc',
-            'offset' => Cron::LOG_SIZE,
+            'offset' => Cron::LOG_SIZE - 1,
             'limit' => 10000
         ]);
 
@@ -91,5 +101,19 @@ class CronLog extends ProcessAbstract
     public static function isCron($program)
     {
         return strpos($program, self::PROGRAM_PREFIX) === 0;
+    }
+
+    public static function parseProgram($program)
+    {
+        if (preg_match('/(' . self::PROGRAM_PREFIX . ')(\d+)_(\d+)/', $program, $matches))
+        {
+            return [
+                'prefix' => $matches[1],
+                'cron_id' => $matches[2],
+                'id' => $matches[3]
+            ];
+        }
+
+        return false;
     }
 }

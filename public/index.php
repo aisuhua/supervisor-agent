@@ -81,7 +81,7 @@ $app->get('/process/reload/{server_id:[0-9]+}', function ($server_id) use ($app)
         $ini .= $process->getIni() . PHP_EOL;
     }
 
-    if (file_put_contents(CronLog::getPathConf(), $ini) === false)
+    if (file_put_contents(Process::getPathConf(), $ini) === false)
     {
         $result['state'] = 0;
         $result['message'] = "配置更新失败";

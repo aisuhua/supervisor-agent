@@ -27,6 +27,11 @@ class Process extends Model
     public $update_time;
     public $create_time;
 
+    public static function getPathConf()
+    {
+        return PATH_SUPERVISOR_CONF . '/process.conf';
+    }
+
     public function getIni()
     {
         $ini = '';

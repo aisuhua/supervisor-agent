@@ -26,6 +26,7 @@ class SupervisorTask extends TaskBase
             $listener->log($event->getServer());
             $listener->log($event->getPool());
             $listener->log(var_export($event->getData(), true));
+            $listener->log(size_format(memory_get_usage(true)));
 
             $eventData = $event->getData();
 
@@ -33,13 +34,9 @@ class SupervisorTask extends TaskBase
             {
                 $cronLock = new CronLock();
 
+                $program_info = CronLog::parseProgram($eventData['groupname']);
                 /** @var CronLog $cronLog */
-                $cronLog = CronLog::findFirst([
-                    'program = :program:',
-                    'bind' => [
-                        'program' => $eventData['groupname']
-                    ]
-                ]);
+                $cronLog = CronLog::findFirst($program_info['id']);
 
                 if (!$cronLog)
                 {
@@ -50,7 +47,6 @@ class SupervisorTask extends TaskBase
                 }
 
                 $success = $this->handleProcess($cronLog, $eventData, $listener);
-                $cronLog->truncate();
                 $cronLock->unlock();
 
                 return $success;
@@ -60,13 +56,9 @@ class SupervisorTask extends TaskBase
                 $commandLock = new CommandLock();
                 $commandLock->lock();
 
+                $program_info = Command::parseProgram($eventData['groupname']);
                 /** @var Command $command */
-                $command = Command::findFirst([
-                    'program = :program:',
-                    'bind' => [
-                        'program' => $eventData['groupname']
-                    ]
-                ]);
+                $command = Command::findFirst($program_info['id']);
 
                 if (!$command)
                 {
@@ -103,12 +95,12 @@ class SupervisorTask extends TaskBase
         }
         catch (FaultException $e) {}
 
-        $status = self::getStatusByEvent($eventData);
+        $status = ProcessAbstract::getStateByEventData($eventData);
 
         // 开始事件
         if ($status == ProcessAbstract::STATUS_STARTED)
         {
-            $process->status = ProcessAbstract::STATUS_STARTED;
+            $process->status = $status;
             $process->start_time = empty($process_info['start']) ? time() : $process_info['start'];
             $process->save();
             return true;
@@ -127,37 +119,10 @@ class SupervisorTask extends TaskBase
         // 删除进程配置
         $supervisor->removeProcess($process->getPathConf(), $process->program);
 
+        // 清理进程日志
+        $process->truncate();
+
         // 保存进程最终状态
         return $process->save();
-    }
-
-    protected static function getStatusByEvent($eventData)
-    {
-        if ($eventData['eventname'] == 'PROCESS_STATE_STARTING')
-        {
-            return ProcessAbstract::STATUS_STARTED;
-        }
-
-        if ($eventData['eventname'] == 'PROCESS_STATE_EXITED')
-        {
-            if ($eventData['expected'] == 1)
-            {
-                return ProcessAbstract::STATUS_FINISHED;
-            }
-
-            return ProcessAbstract::STATUS_FAILED;
-        }
-
-        if ($eventData['eventname'] == 'PROCESS_STATE_STOPPED')
-        {
-            return ProcessAbstract::STATUS_STOPPED;
-        }
-
-        if ($eventData['eventname'] == 'PROCESS_STATE_UNKNOWN')
-        {
-            return ProcessAbstract::STATUS_UNKNOWN;
-        }
-
-        return ProcessAbstract::STATUS_FAILED;
     }
 }

@@ -19,12 +19,13 @@ abstract class ProcessAbstract extends Model
     public $start_time;
     public $end_time;
 
-    abstract static public function getPathConf();
+    public static function getPathConf() {}
 
     abstract public function getProgram();
     abstract public function getLogFile();
     /** @return Server */
     abstract public function getServer();
+    abstract public function truncate();
 
     public function getProcessName()
     {
@@ -72,29 +73,59 @@ abstract class ProcessAbstract extends Model
     {
         if (in_array($process_info['statename'], ['STARTING', 'RUNNING', 'STOPPING']))
         {
-            return ProcessAbstract::STATUS_STARTED;
+            return self::STATUS_STARTED;
         }
         elseif ($process_info['statename'] == 'EXITED')
         {
             return $process_info['exitstatus'] == 0 ?
-                ProcessAbstract::STATUS_FINISHED :
-                ProcessAbstract::STATUS_FAILED;
+                self::STATUS_FINISHED :
+                self::STATUS_FAILED;
         }
         elseif ($process_info['statename'] == 'STOPPED')
         {
-            return ProcessAbstract::STATUS_STOPPED;
+            return self::STATUS_STOPPED;
         }
         elseif ($process_info['statename'] == 'UNKNOWN')
         {
-            return ProcessAbstract::STATUS_UNKNOWN;
+            return self::STATUS_UNKNOWN;
         }
         elseif ($process_info['statename'] == 'FATAL')
         {
-            return ProcessAbstract::STATUS_FAILED;
+            return self::STATUS_FAILED;
         }
         else
         {
-            return ProcessAbstract::STATUS_UNKNOWN;
+            return self::STATUS_UNKNOWN;
         }
+    }
+
+    public static function getStateByEventData($eventData)
+    {
+        if ($eventData['eventname'] == 'PROCESS_STATE_STARTING')
+        {
+            return self::STATUS_STARTED;
+        }
+
+        if ($eventData['eventname'] == 'PROCESS_STATE_EXITED')
+        {
+            if ($eventData['expected'] == 1)
+            {
+                return self::STATUS_FINISHED;
+            }
+
+            return self::STATUS_FAILED;
+        }
+
+        if ($eventData['eventname'] == 'PROCESS_STATE_STOPPED')
+        {
+            return self::STATUS_STOPPED;
+        }
+
+        if ($eventData['eventname'] == 'PROCESS_STATE_UNKNOWN')
+        {
+            return self::STATUS_UNKNOWN;
+        }
+
+        return ProcessAbstract::STATUS_FAILED;
     }
 }

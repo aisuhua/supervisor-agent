@@ -101,11 +101,11 @@ class Supervisor extends SupervisorBase
         $content = '';
         if (file_exists($conf_path))
         {
-            $content = trim(file_get_contents($conf_path));
-            if ($content === false)
+            if (($content = file_get_contents($conf_path)) === false)
             {
                 throw new Exception("无法读取文件");
             }
+            $content = trim($content);
         }
 
         if (!empty($content))
