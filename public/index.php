@@ -56,7 +56,7 @@ $app->get('/state', function() use ($app) {
 })->setName('state');
 
 // 重新加载进程配置
-$app->get('/process/reload/{server_id:[0-9]+}', function ($server_id) use ($app) {
+$app->post('/process/reload/{server_id:[0-9]+}', function ($server_id) use ($app) {
     $result = [];
 
     $server = Server::findFirst($server_id);
@@ -95,7 +95,7 @@ $app->get('/process/reload/{server_id:[0-9]+}', function ($server_id) use ($app)
 });
 
 // 更新命令配置
-$app->get('/command/add/{server_id:[0-9]+}/{id:[0-9]+}', function($server_id, $id) use ($app) {
+$app->post('/command/add/{server_id:[0-9]+}/{id:[0-9]+}', function($server_id, $id) use ($app) {
     $server = Server::findFirst($server_id);
     if (!$server)
     {
