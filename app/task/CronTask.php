@@ -1,6 +1,7 @@
 <?php
 namespace SupAgent\Task;
 
+use Phalcon\Cli\Task;
 use SupAgent\Model\Command;
 use SupAgent\Model\Cron;
 use SupAgent\Model\CronLog;
@@ -15,7 +16,7 @@ use Zend\XmlRpc\Client\Exception\FaultException;
 use SupAgent\Lock\Cron as CronLock;
 use SupAgent\Lock\Command as CommandLock;
 
-class CronTask extends TaskBase
+class CronTask extends Task
 {
     public function startAction($params)
     {
@@ -31,9 +32,8 @@ class CronTask extends TaskBase
         // 执行一些清理工作
         $this->clearAction($server_id);
 
-        $loop = EventLoop::create();
-
         // 每分钟启动一次
+        $loop = EventLoop::create();
         $loop->addPeriodicTimer(60, function () use ($loop, $server_id) {
             $loop->addTimer(60 - time() % 60, function() use ($server_id) {
                 /** @var \SupAgent\Model\Server $server */
@@ -131,7 +131,7 @@ class CronTask extends TaskBase
         $this->clearProcess($server);
         $this->clearConfig($server, CronLog::getPathConf());
         $this->clearConfig($server, Command::getPathConf());
-        $this->clearCronLogFiles();
+        $this->clearCronLogFiles($server);
 
         $cronLock->unlock();
         $commandLock->unlock();
@@ -360,10 +360,29 @@ class CronTask extends TaskBase
     }
 
     /**
-     * 清理定时执行日志
+     * 清理定时任务日志
+     *
+     * @param Server $server
      */
-    protected function clearCronLogFiles()
+    protected function clearCronLogFiles(Server &$server)
     {
+        // 删除过多的记录
+        $crones = Cron::find([
+            'server_id = :server_id:',
+            'bind' => [
+                'server_id' => $server->id
+            ]
+        ]);
+
+        $cron_ids = [];
+        /** @var Cron $cron */
+        foreach ($crones as $cron)
+        {
+            $cron->truncate();
+            $cron_ids[] = $cron->id;
+        }
+
+        // 删除无效的日志文件
         $cron_files = [];
         $delete_files = [];
 
@@ -373,24 +392,15 @@ class CronTask extends TaskBase
             if (CronLog::isCron($file))
             {
                 $program_info = CronLog::parseProgram(trim($file, '.log'));
-                $key = $program_info['id'];
-                $cron_files[$key][] = $file;
+                $cron_id = $program_info['id'];
+                $cron_files[$cron_id][] = $file;
             }
         }
 
         if (!empty($cron_files))
         {
-            $log_ids = array_keys($cron_files);
-
-            $cronLogs = CronLog::find([
-                'id IN({ids:array})',
-                'bind' => [
-                    'ids' => $log_ids
-                ],
-                'columns' => 'id'
-            ]);
-
-            $delete_ids = array_diff($log_ids, array_column($cronLogs->toArray(), 'id'));
+            $file_cron_ids = array_keys($cron_files);
+            $delete_ids = array_diff($file_cron_ids, array_column($crones->toArray(), 'id'));
             if (!empty($delete_ids))
             {
                 foreach ($delete_ids as $delete_id)

@@ -6,7 +6,6 @@ use Phalcon\Cli\Console;
 use Phalcon\Cli\Dispatcher;
 
 require __DIR__ . '/../init.php';
-require PATH_INIT . '/cli-routes.php';
 
 // 注冊自动加载目录
 $loader->registerNamespaces([
@@ -22,8 +21,7 @@ $di->set('dispatcher', function () {
     return $dispatcher;
 });
 
-$console = new Console();
-$console->setDI($di);
+$console = new Console($di);
 
 $arguments = [];
 

@@ -24,7 +24,7 @@ class Cron extends Model
 
     const STATUS_ACTIVE = 1;
     const STATE_INACTIVE = -1;
-    const LOG_SIZE = 10;
+    const LOG_SIZE = 5;
 
     public function initialize()
     {
@@ -34,5 +34,38 @@ class Cron extends Model
             'alias' => 'server',
             'reusable' => false
         ]);
+
+        $this->hasMany('id', CronLog::class, 'cron_id', [
+            'alias' => 'cronLog',
+            'reusable' => true
+        ]);
+    }
+
+    public function truncate()
+    {
+        $cronLogs= $this->getRelated('cronLog', [
+            "status IN ({status:array})",
+            'bind' => [
+                'status' => [
+                    ProcessAbstract::STATUS_FINISHED,
+                    ProcessAbstract::STATUS_STOPPED,
+                    ProcessAbstract::STATUS_UNKNOWN,
+                    ProcessAbstract::STATUS_FAILED
+                ]
+            ],
+            'order' => 'id desc',
+            'offset' => Cron::LOG_SIZE,
+            'limit' => 10000
+        ]);
+
+        if ($cronLogs->count())
+        {
+            /** @var CronLog $cronLog */
+            foreach ($cronLogs as $cronLog)
+            {
+                @unlink($cronLog->getLogFile());
+                $cronLog->delete();
+            }
+        }
     }
 }

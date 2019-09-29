@@ -1,23 +1,21 @@
 <?php
 namespace SupAgent\Task;
 
+use Phalcon\Cli\Task;
 use Mtdowling\Supervisor\EventListener;
 use Mtdowling\Supervisor\EventNotification;
 use SupAgent\Model\Command;
-use SupAgent\Model\Cron;
-use SupAgent\Supervisor\Supervisor;
 use SupAgent\Model\CronLog;
 use Zend\XmlRpc\Client\Exception\FaultException;
 use SupAgent\Lock\Cron as CronLock;
 use SupAgent\Lock\Command as CommandLock;
 use SupAgent\Model\ProcessAbstract;
 
-class SupervisorTask extends TaskBase
+class SupervisorTask extends Task
 {
     public function eventAction()
     {
         $listener = new EventListener();
-
         $listener->listen(function(EventListener $listener, EventNotification $event) {
             // 占用内存是否超过限制
             // 是否有文件发生修改
