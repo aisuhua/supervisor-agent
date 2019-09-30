@@ -10,21 +10,24 @@ use Zend\XmlRpc\Client\Exception\FaultException;
 use SupAgent\Lock\Cron as CronLock;
 use SupAgent\Lock\Command as CommandLock;
 use SupAgent\Model\ProcessAbstract;
+use SupAgent\Library\Version;
 
-class SupervisorTask extends Task
+class SupervisorTask extends TaskBase
 {
     public function eventAction()
     {
+        $version = new Version();
+        $start_time = time();
         $listener = new EventListener();
-        $listener->listen(function(EventListener $listener, EventNotification $event) {
-            // 占用内存是否超过限制
-            // 是否有文件发生修改
+
+        $listener->listen(function(EventListener $listener, EventNotification $event) use (&$version, $start_time) {
+
+            $this->checkBeforeNext($version, $start_time);
 
             $listener->log($event->getEventName());
             $listener->log($event->getServer());
             $listener->log($event->getPool());
             $listener->log(var_export($event->getData(), true));
-            $listener->log(size_format(memory_get_usage(true)));
 
             $eventData = $event->getData();
 

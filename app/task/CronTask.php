@@ -3,6 +3,7 @@ namespace SupAgent\Task;
 
 use Phalcon\Cli\Task;
 use Phalcon\Mvc\Model;
+use SupAgent\Library\Version;
 use SupAgent\Model\Command;
 use SupAgent\Model\Cron;
 use SupAgent\Model\CronLog;
@@ -17,7 +18,7 @@ use Zend\XmlRpc\Client\Exception\FaultException;
 use SupAgent\Lock\Cron as CronLock;
 use SupAgent\Lock\Command as CommandLock;
 
-class CronTask extends Task
+class CronTask extends TaskBase
 {
     public function startAction($params)
     {
@@ -28,96 +29,85 @@ class CronTask extends Task
             throw new Exception('缺少 server_id 参数');
         }
 
+        sleep(1);
+
         $server_id = (int) $params[0];
-        $last_time = filemtime(PATH_ROOT . '/.version');
+        /** @var \SupAgent\Model\Server $server */
+        $server = Server::findFirst($server_id);
+        if (!$server)
+        {
+            throw new Exception('该服务器不存在');
+        }
 
         // 执行一些清理工作
-        $this->clearAction($server_id);
+        $this->clearAction($server);
 
         // 每分钟启动一次
+        $version = new Version();
+        $start_time = time();
         $loop = EventLoop::create();
-        $dataCache = $this->di->get('dataCache');
 
-        $runTask = function() use ($loop, $dataCache, $server_id, $last_time)  {
-            /** @var \SupAgent\Model\Server $server */
-            $server = Server::findFirst($server_id);
-            if (!$server)
-            {
-                throw new Exception('该服务器不存在');
-            }
-
-            $supervisor = $server->getSupervisor();
-
+        $runTask = function () use (&$server, &$version, $start_time) {
             // 定时任务列表
             $crones = Cron::find([
                 'server_id = :server_id: AND status = :status:',
                 'bind' => [
-                    'server_id' => $server_id,
+                    'server_id' => $server->id,
                     'status' => Cron::STATUS_ACTIVE
                 ]
             ]);
 
-            if ($crones->count() == 0)
+            if ($crones->count() > 0)
             {
-                return true;
-            }
+                $cronLock = new CronLock();
+                $cronLock->lock();
 
-            $cronLock = new CronLock();
-            $cronLock->lock();
+                $now = new \DateTime();
 
-            $now = new \DateTime();
-
-            /** @var Cron $cron */
-            foreach ($crones as $cron)
-            {
-                // 判断定时任务是否应该启动
-                $cronExpression = CronExpression::factory($cron->time);
-                if (!$cronExpression->isDue($now))
+                /** @var Cron $cron */
+                foreach ($crones as $cron)
                 {
-                    continue;
+                    // 判断定时任务是否应该启动
+                    $cronExpression = CronExpression::factory($cron->time);
+                    if (!$cronExpression->isDue($now))
+                    {
+                        continue;
+                    }
+
+                    // 添加执行日志
+                    $cronLog = new CronLog();
+                    $cronLog->cron_id = $cron->id;
+                    $cronLog->server_id = $cron->server_id;
+                    $cronLog->command = $cron->command;
+                    $cronLog->user = $cron->user;
+                    $cronLog->status = CronLog::STATUS_INI;
+                    $cronLog->create();
+
+                    $cronLog->refresh();
+                    $program = $cronLog->getProgram();
+                    $cronLog->program = $program;
+                    $cronLog->save();
+
+                    $cronLog->getServer()
+                        ->getSupervisor()
+                        ->addProcess(CronLog::getPathConf(), $program, $cronLog->getIni());
+
+                    // 更新上次执行时间
+                    $cron->last_time = $now->format('U');
+                    $cron->save();
+
+                    print_cli("{$program} started");
                 }
 
-                // 添加执行日志
-                $cronLog = new CronLog();
-                $cronLog->cron_id = $cron->id;
-                $cronLog->server_id = $cron->server_id;
-                $cronLog->command = $cron->command;
-                $cronLog->user = $cron->user;
-                $cronLog->status = CronLog::STATUS_INI;
-                $cronLog->create();
-
-                $cronLog->refresh();
-                $program = $cronLog->getProgram();
-                $cronLog->program = $program;
-                $cronLog->save();
-
-                $supervisor->addProcess(CronLog::getPathConf(), $program, $cronLog->getIni());
-
-                // 更新上次执行时间
-                $cron->last_time = $now->format('U');
-                $cron->save();
-
-                print_cli("{$program} started");
+                $cronLock->unlock();
             }
 
-            $cronLock->unlock();
-
-            if ($last_time != filemtime(PATH_ROOT . '/.version'))
-            {
-                $dataCache->save('next_loop', 1, 60 - time() % 60);
-                exit;
-            }
-
-            echo size_format(memory_get_usage(true)), PHP_EOL;
+            $this->checkBeforeNext($version, $start_time);
         };
 
-        if ($this->di->get('dataCache')->get('next_loop'))
-        {
-            $this->di->get('dataCache')->delete('next_loop');
-            $loop->addTimer(60 - time() % 60, $runTask);
-        }
+        $loop->addTimer(60 - time() % 60, $runTask);
 
-        $loop->addPeriodicTimer(60, function () use ($loop, $runTask) {
+        $loop->addPeriodicTimer(60, function () use (&$loop, &$runTask) {
             $loop->addTimer(60 - time() % 60, $runTask);
         });
 
@@ -127,10 +117,10 @@ class CronTask extends Task
     /**
      * 做一些清理工作
      *
-     * @param $server_id
+     * @param Server $server
      * @throws Exception
      */
-    protected function clearAction($server_id)
+    protected function clearAction(Server &$server)
     {
         // 锁定操作
         $cronLock = new CronLock();
@@ -138,17 +128,12 @@ class CronTask extends Task
         $commandLock = new CommandLock();
         $commandLock->lock();
 
-        /** @var \SupAgent\Model\Server $server */
-        $server = Server::findFirst($server_id);
-        if (!$server)
-        {
-            throw new Exception('该服务器不存在');
-        }
+        $supervisor = $server->getSupervisor();
 
-        $this->fixState($server);
-        $this->clearProcess($server);
-        $this->clearConfig($server, CronLog::getPathConf());
-        $this->clearConfig($server, Command::getPathConf());
+        $this->fixState($server, $supervisor);
+        $this->clearProcess($server, $supervisor);
+        $this->clearConfig($server, $supervisor, CronLog::getPathConf());
+        $this->clearConfig($server, $supervisor, Command::getPathConf());
         $this->clearCronLogFiles($server);
 
         $cronLock->unlock();
@@ -157,13 +142,11 @@ class CronTask extends Task
 
     /**
      * 清理不一致的定时任务日志
-     *
+     * @param Supervisor $supervisor
      * @param Server $server
      */
-    protected function fixState(Server &$server)
+    protected function fixState(Server &$server, Supervisor &$supervisor)
     {
-        $supervisor = $server->getSupervisor();
-
         // 定时任务
         $cronLogs = CronLog::find([
             'server_id = :server_id: AND status IN({status:array})',
@@ -254,8 +237,9 @@ class CronTask extends Task
      * 清理僵尸进程
      *
      * @param Server $server
+     * @param Supervisor $supervisor
      */
-    protected function clearProcess(Server &$server)
+    protected function clearProcess(Server &$server, Supervisor &$supervisor)
     {
         $supervisor = $server->getSupervisor();
 
@@ -308,10 +292,8 @@ class CronTask extends Task
         }
     }
 
-    protected function clearConfig(Server &$server, $conf_path)
+    protected function clearConfig(Server &$server, Supervisor &$supervisor, $conf_path)
     {
-        $supervisor = $server->getSupervisor();
-
         // 检查配置是否有多余的项
         if (!is_file($conf_path))
         {

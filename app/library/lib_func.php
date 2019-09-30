@@ -29,6 +29,11 @@ function print_cli(...$args)
     echo '[' . date('Y-m-d H:i:s'), '] ' . implode('', $args), PHP_EOL;
 }
 
+function print_err(...$args)
+{
+    fwrite(STDERR, '[' . date('Y-m-d H:i:s') . '] ' . implode('', $args) . PHP_EOL);
+}
+
 function build_ini_string(array $parsed)
 {
     $ini = '';

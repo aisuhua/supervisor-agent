@@ -18,9 +18,9 @@ $di->setShared('db', function () {
     ]);
 });
 
-$di->setShared('dataCache', function () {
+$di->setShared('fileCache', function () {
     $frontCache = new FrontData([
-        'lifetime' => $GLOBALS['cache']['lifetime']
+        'lifetime' => $GLOBALS['file_cache']['lifetime']
     ]);
 
     return new BackFile($frontCache, [
