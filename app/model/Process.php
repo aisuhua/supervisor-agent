@@ -16,6 +16,7 @@ class Process extends Model
     public $numprocs;
     public $numprocs_start;
     public $user;
+    public $stopwaitsecs;
     public $directory;
     public $autostart;
     public $startretries;
@@ -41,6 +42,7 @@ class Process extends Model
         $ini .= "numprocs_start={$this->numprocs_start}" . PHP_EOL;
         $ini .= "process_name={$this->process_name}" . PHP_EOL;
         $ini .= "user={$this->user}" . PHP_EOL;
+        $ini .= "stopwaitsecs={$this->stopwaitsecs}" . PHP_EOL;
         $ini .= "directory={$this->directory}" . PHP_EOL;
         $ini .= "autostart={$this->autostart}" . PHP_EOL;
         $ini .= "startretries={$this->startretries}" . PHP_EOL;
