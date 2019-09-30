@@ -5,6 +5,8 @@
 
 use Phalcon\Db\Adapter\Pdo\Mysql;
 use SupAgent\Supervisor\Supervisor;
+use Phalcon\Cache\Backend\File as BackFile;
+use Phalcon\Cache\Frontend\Data as FrontData;
 
 $di->setShared('db', function () {
     return new Mysql([
@@ -16,6 +18,17 @@ $di->setShared('db', function () {
     ]);
 });
 
+$di->setShared('dataCache', function () {
+    $frontCache = new FrontData([
+        'lifetime' => $GLOBALS['cache']['lifetime']
+    ]);
+
+    return new BackFile($frontCache, [
+        'cacheDir' => PATH_CACHE . '/data/',
+    ]);
+});
+
 $di->set('supervisor', function ($name, $ip, $port, $username = null, $password = null) {
     return new Supervisor($name, $ip, $username, $password, $port);
 });
+
