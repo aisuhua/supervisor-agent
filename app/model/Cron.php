@@ -41,6 +41,11 @@ class Cron extends Model
         ]);
     }
 
+    public function beforeCreate()
+    {
+        $this->create_time = time();
+    }
+
     public function truncate()
     {
         $cronLogs= $this->getRelated('cronLog', [

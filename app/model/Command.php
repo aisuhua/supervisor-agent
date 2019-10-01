@@ -33,6 +33,11 @@ class Command extends ProcessAbstract
         ]);
     }
 
+    public function beforeSave()
+    {
+        $this->update_time = time();
+    }
+
     public function getServer()
     {
         return $this->getRelated('server');
