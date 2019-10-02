@@ -11,6 +11,7 @@ use Phalcon\Cache\Frontend\Data as FrontData;
 $di->setShared('db', function () {
     return new Mysql([
         'host' => $GLOBALS['db']['host'],
+        'port' => $GLOBALS['db']['port'],
         'username' => $GLOBALS['db']['username'],
         'password' => $GLOBALS['db']['password'],
         'dbname' => $GLOBALS['db']['dbname'],
