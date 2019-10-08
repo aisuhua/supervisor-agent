@@ -5,10 +5,11 @@
 
 use Phalcon\Db\Adapter\Pdo\Mysql;
 use SupAgent\Supervisor\Supervisor;
-use Phalcon\Cache\Backend\File as BackFile;
-use Phalcon\Cache\Frontend\Data as FrontData;
+use Phalcon\Mvc\Model\Metadata\Memory as MemoryMetaData;
+use Phalcon\Mvc\Model\MetaData\Files as FileMetaData;
 
-$di->setShared('db', function () {
+$di->setShared('db', function ()
+{
     return new Mysql([
         'host' => $GLOBALS['db']['host'],
         'port' => $GLOBALS['db']['port'],
@@ -19,17 +20,21 @@ $di->setShared('db', function () {
     ]);
 });
 
-$di->setShared('fileCache', function () {
-    $frontCache = new FrontData([
-        'lifetime' => $GLOBALS['file_cache']['lifetime']
-    ]);
+$di->setShared('modelsMetadata', function ()
+{
+    if (DEBUG_MODE)
+    {
+        return new MemoryMetaData();
+    }
 
-    return new BackFile($frontCache, [
-        'cacheDir' => PATH_CACHE . '/data/',
+    return new FileMetaData([
+        'metaDataDir' => PATH_CACHE . '/metadata/',
+        'lifetime' => 86400
     ]);
 });
 
-$di->set('supervisor', function ($name, $ip, $port, $username = null, $password = null) {
+$di->set('supervisor', function ($name, $ip, $port, $username = null, $password = null)
+{
     return new Supervisor($name, $ip, $username, $password, $port);
 });
 

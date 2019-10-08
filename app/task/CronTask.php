@@ -1,8 +1,6 @@
 <?php
 namespace SupAgent\Task;
 
-use Phalcon\Cli\Task;
-use Phalcon\Mvc\Model;
 use SupAgent\Library\Version;
 use SupAgent\Model\Command;
 use SupAgent\Model\Cron;
@@ -135,6 +133,7 @@ class CronTask extends TaskBase
         $this->clearConfig($server, $supervisor, CronLog::getPathConf());
         $this->clearConfig($server, $supervisor, Command::getPathConf());
         $this->clearCronLogFiles($server);
+        $this->restartApi($server, $supervisor);
 
         $cronLock->unlock();
         $commandLock->unlock();
@@ -419,6 +418,35 @@ class CronTask extends TaskBase
                 {
                     print_cli("{$file_path} deleted");
                 }
+            }
+        }
+    }
+
+    protected function restartApi(Server &$server, Supervisor &$supervisor)
+    {
+        $api_group = '_supervisor_api';
+
+        try
+        {
+            $supervisor->stopProcessGroup($api_group, true);
+        }
+        catch (FaultException $e)
+        {
+            if ($e->getCode() != StatusCode::NOT_RUNNING)
+            {
+                throw $e;
+            }
+        }
+
+        try
+        {
+            $supervisor->startProcessGroup($api_group, false);
+        }
+        catch (FaultException $e)
+        {
+            if ($e->getCode() != StatusCode::ALREADY_STARTED)
+            {
+                throw $e;
             }
         }
     }
