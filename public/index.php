@@ -12,7 +12,7 @@ use SupAgent\Lock\Command as CommandLock;
 
 require __DIR__ . '/../init.php';
 
-define('MODE', 'rest');
+define('MODE', 'restful');
 
 $app = new Micro($di);
 

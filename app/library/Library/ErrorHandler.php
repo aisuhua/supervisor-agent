@@ -91,7 +91,7 @@ class ErrorHandler
             exit(1);
         }
 
-        if (MODE == 'rest')
+        if (MODE == 'restful')
         {
             self::responseErrorMessage();
         }

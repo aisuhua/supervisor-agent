@@ -36,7 +36,7 @@ class Cron extends Model
         ]);
 
         $this->hasMany('id', CronLog::class, 'cron_id', [
-            'alias' => 'cronLog',
+            'alias' => 'cronLogs',
             'reusable' => true
         ]);
     }
@@ -48,7 +48,7 @@ class Cron extends Model
 
     public function truncate()
     {
-        $cronLogs= $this->getRelated('cronLog', [
+        $cronLogs= $this->getRelated('cronLogs', [
             "status IN ({status:array})",
             'bind' => [
                 'status' => [

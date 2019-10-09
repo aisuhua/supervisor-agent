@@ -383,6 +383,7 @@ class CronTask extends TaskBase
 
         // 删除无效的日志文件
         $cron_files = [];
+        $log_files = [];
         $delete_files = [];
 
         $files = scandir(PATH_SUPERVISOR_LOG_CRON, 1);
@@ -391,29 +392,56 @@ class CronTask extends TaskBase
             if (CronLog::isCron($file))
             {
                 $program_info = CronLog::parseProgram(trim($file, '.log'));
-                $cron_id = $program_info['id'];
-                $cron_files[$cron_id][] = $file;
+
+                $log_files[$program_info['id']][] = $file;
+                $cron_files[$program_info['cron_id']][] = $file;
+
+                if (count($cron_files[$program_info['cron_id']]) > Cron::LOG_SIZE)
+                {
+                    $delete_files[] = $file;
+                }
             }
         }
 
+        // 删除没有对应定时任务的日志文件
         if (!empty($cron_files))
         {
             $file_cron_ids = array_keys($cron_files);
-            $delete_ids = array_diff($file_cron_ids, array_column($crones->toArray(), 'id'));
-            if (!empty($delete_ids))
+            $delete_ids = array_diff($file_cron_ids, $cron_ids);
+            foreach ($delete_ids as $delete_id)
             {
-                foreach ($delete_ids as $delete_id)
-                {
-                    $delete_files = $cron_files[$delete_id];
-                }
+                $delete_files = array_merge($delete_files, $cron_files[$delete_id]);
+            }
+        }
+
+        // 删除没有对应日志记录的日志文件
+        if (!empty($log_files))
+        {
+            $file_log_ids = array_keys($log_files);
+            $cronLogs = CronLog::find([
+                "id IN ({id:array})",
+                'bind' => [
+                    'id' => $file_log_ids
+                ],
+                'columns' => 'id'
+            ]);
+
+            $log_ids = array_column($cronLogs->toArray(), 'id');
+            $delete_ids = array_diff($file_log_ids, $log_ids);
+
+            foreach ($delete_ids as $delete_id)
+            {
+                $delete_files = array_merge($delete_files, $log_files[$delete_id]);
             }
         }
 
         if (!empty($delete_files))
         {
+            $delete_files = array_unique($delete_files);
             foreach ($delete_files as $delete_file)
             {
                 $file_path = PATH_SUPERVISOR_LOG_CRON . '/' . $delete_file;
+
                 if (@unlink($file_path))
                 {
                     print_cli("{$file_path} deleted");
@@ -422,6 +450,12 @@ class CronTask extends TaskBase
         }
     }
 
+    /**
+     * 重启 _supervisor_api 进程
+     *
+     * @param Server $server
+     * @param Supervisor $supervisor
+     */
     protected function restartApi(Server &$server, Supervisor &$supervisor)
     {
         $api_group = '_supervisor_api';
