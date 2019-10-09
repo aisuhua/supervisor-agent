@@ -9,5 +9,3 @@ $GLOBALS['db']['charset'] = 'utf8mb4';
 
 $GLOBALS['api']['key'] = '7X5F68BmuNCvA4eH7DEd5EVJ';
 $GLOBALS['api']['expired'] = 60;
-
-$GLOBALS['file_cache']['lifetime'] = 86400;

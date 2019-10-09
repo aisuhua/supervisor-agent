@@ -12,10 +12,13 @@ use SupAgent\Lock\Command as CommandLock;
 
 require __DIR__ . '/../init.php';
 
+define('MODE', 'rest');
+
 $app = new Micro($di);
 
 // 前置检查
-$app->before(function () use ($app) {
+$app->before(function () use ($app)
+{
     $route = $app->router->getMatchedRoute();
     if ($route->getName() == 'state')
     {
@@ -49,14 +52,16 @@ $app->before(function () use ($app) {
 });
 
 // 查看服务状态
-$app->get('/state', function() use ($app) {
+$app->get('/state', function() use ($app)
+{
     $result['state'] = 1;
     $result['message'] = "RUNNING";
     return $app->response->setJsonContent($result);
 })->setName('state');
 
 // 重新加载进程配置
-$app->post('/process/reload/{server_id:[0-9]+}', function ($server_id) use ($app) {
+$app->post('/process/reload/{server_id:[0-9]+}', function ($server_id) use ($app)
+{
     $result = [];
 
     $server = Server::findFirst($server_id);
@@ -95,7 +100,8 @@ $app->post('/process/reload/{server_id:[0-9]+}', function ($server_id) use ($app
 });
 
 // 更新命令配置
-$app->post('/command/add/{server_id:[0-9]+}/{id:[0-9]+}', function($server_id, $id) use ($app) {
+$app->post('/command/add/{server_id:[0-9]+}/{id:[0-9]+}', function($server_id, $id) use ($app)
+{
     $server = Server::findFirst($server_id);
     if (!$server)
     {
@@ -151,7 +157,8 @@ $app->post('/command/add/{server_id:[0-9]+}/{id:[0-9]+}', function($server_id, $
 });
 
 // 读取定时任务日志
-$app->get('/cron-log/tail/{id:[0-9]+}/{file_size:[0-9]+}', function ($id, $file_size) use ($app) {
+$app->get('/cron-log/tail/{id:[0-9]+}/{file_size:[0-9]+}', function ($id, $file_size) use ($app)
+{
     /** @var CronLog $cronLog */
     $cronLog = CronLog::findFirst($id);
     if (!$cronLog)
@@ -170,7 +177,8 @@ $app->get('/cron-log/tail/{id:[0-9]+}/{file_size:[0-9]+}', function ($id, $file_
 })->setName('tail-cron-log');
 
 // 读取命令执行日志
-$app->get('/command-log/tail/{id:[0-9]+}/{file_size:[0-9]+}', function ($id, $file_size) use ($app) {
+$app->get('/command-log/tail/{id:[0-9]+}/{file_size:[0-9]+}', function ($id, $file_size) use ($app)
+{
     /** @var Command $command */
     $command = Command::findFirst($id);
     if (!$command)
@@ -187,5 +195,14 @@ $app->get('/command-log/tail/{id:[0-9]+}/{file_size:[0-9]+}', function ($id, $fi
     echoLog($log_file, $file_size);
     exit();
 })->setName('tail-command-log');
+
+// 404
+$app->notFound(function () use ($app)
+{
+    return $app->response->setJsonContent([
+        'state' => 0,
+        'message' => '404 Not Found'
+    ]);
+});
 
 $app->handle();

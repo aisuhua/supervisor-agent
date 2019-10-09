@@ -24,7 +24,6 @@ $di->set('dispatcher', function () {
 $console = new Console($di);
 
 $arguments = [];
-
 foreach ($argv as $k => $arg)
 {
     if ($k === 1)
@@ -41,31 +40,4 @@ foreach ($argv as $k => $arg)
     }
 }
 
-try
-{
-    $console->handle($arguments);
-}
-catch (\Phalcon\Exception $e)
-{
-    fwrite(STDERR, $e->getFile() . PHP_EOL);
-    fwrite(STDERR, $e->getLine() . PHP_EOL);
-    fwrite(STDERR, $e->getMessage() . PHP_EOL);
-    fwrite(STDERR, $e->getTraceAsString() . PHP_EOL);
-    exit(1);
-}
-catch (\Throwable $throwable)
-{
-    fwrite(STDERR, $throwable->getFile() . PHP_EOL);
-    fwrite(STDERR, $throwable->getLine() . PHP_EOL);
-    fwrite(STDERR, $throwable->getMessage() . PHP_EOL);
-    fwrite(STDERR, $throwable->getTraceAsString() . PHP_EOL);
-    exit(1);
-}
-catch (\Exception $exception)
-{
-    fwrite(STDERR, $exception->getFile() . PHP_EOL);
-    fwrite(STDERR, $exception->getLine() . PHP_EOL);
-    fwrite(STDERR, $exception->getMessage() . PHP_EOL);
-    fwrite(STDERR, $exception->getTraceAsString() . PHP_EOL);
-    exit(1);
-}
+$console->handle($arguments);
