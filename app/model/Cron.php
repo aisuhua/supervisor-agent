@@ -24,7 +24,7 @@ class Cron extends Model
 
     const STATUS_ACTIVE = 1;
     const STATE_INACTIVE = -1;
-    const LOG_SIZE = 5;
+    const LOG_SIZE = 3;
 
     public function initialize()
     {
@@ -68,7 +68,11 @@ class Cron extends Model
             /** @var CronLog $cronLog */
             foreach ($cronLogs as $cronLog)
             {
-                @unlink($cronLog->getLogFile());
+                if (is_file($cronLog->getLogFile()))
+                {
+                    @unlink($cronLog->getLogFile());
+                }
+
                 $cronLog->delete();
             }
         }

@@ -91,14 +91,7 @@ class ErrorHandler
             exit(1);
         }
 
-        if (MODE == 'restful')
-        {
-            self::responseErrorMessage();
-        }
-        else
-        {
-            self::renderErrorPage();
-        }
+        self::responseErrorMessage();
     }
 
     protected static function responseErrorMessage()
@@ -109,26 +102,6 @@ class ErrorHandler
             'state' => 0,
             'message' => '500 Internal Server Error'
         ])->send();
-    }
-
-    protected static function renderErrorPage()
-    {
-        $di = Di::getDefault();
-
-        // 处理 500、400 等业务跳转
-        /** @var Dispatcher $dispatcher */
-        $dispatcher = $di->get('dispatcher');
-        $view = $di->get('view');
-        $response = $di->get('response');
-
-        $dispatcher->setControllerName('error');
-        $dispatcher->setActionName('index');
-
-        $view->start();
-        $dispatcher->dispatch();
-        $view->render('error', 'index', $dispatcher->getParams());
-        $view->finish();
-        $response->setContent($view->getContent())->send();
     }
 
     protected static function getErrorType($code)

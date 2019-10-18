@@ -27,8 +27,6 @@ class CronTask extends TaskBase
             throw new Exception('缺少 server_id 参数');
         }
 
-        sleep(1);
-
         $server_id = (int) $params[0];
         /** @var \SupAgent\Model\Server $server */
         $server = Server::findFirst($server_id);
@@ -37,75 +35,80 @@ class CronTask extends TaskBase
             throw new Exception('该服务器不存在');
         }
 
+        sleep(1);
+
         // 执行一些清理工作
         $this->clearAction($server);
 
+        // 启动定时任务
+        $crones = Cron::find([
+            'server_id = :server_id: AND status = :status:',
+            'bind' => [
+                'server_id' => $server->id,
+                'status' => Cron::STATUS_ACTIVE
+            ]
+        ]);
+
+        if ($crones->count() == 0)
+        {
+            print_cli("cron is empty, sleep 86400s");
+            sleep(86400);
+            exit();
+        }
+
         // 每分钟启动一次
-        $version = new Version();
         $start_time = time();
+        $version = new Version();
         $loop = EventLoop::create();
 
-        $runTask = function () use (&$server, &$version, $start_time) {
-            // 定时任务列表
-            $crones = Cron::find([
-                'server_id = :server_id: AND status = :status:',
-                'bind' => [
-                    'server_id' => $server->id,
-                    'status' => Cron::STATUS_ACTIVE
-                ]
-            ]);
+        $runTask = function () use (&$server, &$crones, &$version, $start_time)
+        {
+            $cronLock = new CronLock();
+            $cronLock->lock();
 
-            if ($crones->count() > 0)
+            $now = new \DateTime();
+
+            /** @var Cron $cron */
+            foreach ($crones as $cron)
             {
-                $cronLock = new CronLock();
-                $cronLock->lock();
-
-                $now = new \DateTime();
-
-                /** @var Cron $cron */
-                foreach ($crones as $cron)
+                // 判断定时任务是否应该启动
+                $cronExpression = CronExpression::factory($cron->time);
+                if (!$cronExpression->isDue($now))
                 {
-                    // 判断定时任务是否应该启动
-                    $cronExpression = CronExpression::factory($cron->time);
-                    if (!$cronExpression->isDue($now))
-                    {
-                        continue;
-                    }
-
-                    // 添加执行日志
-                    $cronLog = new CronLog();
-                    $cronLog->cron_id = $cron->id;
-                    $cronLog->server_id = $cron->server_id;
-                    $cronLog->command = $cron->command;
-                    $cronLog->user = $cron->user;
-                    $cronLog->status = CronLog::STATUS_INI;
-                    $cronLog->create();
-
-                    $cronLog->refresh();
-                    $program = $cronLog->getProgram();
-                    $cronLog->program = $program;
-                    $cronLog->save();
-
-                    $cronLog->getServer()
-                        ->getSupervisor()
-                        ->addProcess(CronLog::getPathConf(), $program, $cronLog->getIni());
-
-                    // 更新上次执行时间
-                    $cron->last_time = $now->format('U');
-                    $cron->save();
-
-                    print_cli("{$program} started");
+                    continue;
                 }
 
-                $cronLock->unlock();
+                // 添加执行日志
+                $cronLog = new CronLog();
+                $cronLog->cron_id = $cron->id;
+                $cronLog->server_id = $cron->server_id;
+                $cronLog->command = $cron->command;
+                $cronLog->user = $cron->user;
+                $cronLog->status = CronLog::STATUS_INI;
+                $cronLog->create();
+
+                $cronLog->refresh();
+                $program = $cronLog->getProgram();
+                $cronLog->program = $program;
+                $cronLog->save();
+
+                $server->getSupervisor()->addProcess(CronLog::getPathConf(), $program, $cronLog->getIni());
+
+                // 更新上次执行时间
+                $cron->last_time = $now->format('U');
+                $cron->save();
+
+                print_cli("{$program} started");
             }
 
+            $cronLock->unlock();
             $this->checkBeforeNext($version, $start_time);
         };
 
+        // 设置运行周期
         $loop->addTimer(60 - time() % 60, $runTask);
-
-        $loop->addPeriodicTimer(60, function () use (&$loop, &$runTask) {
+        $loop->addPeriodicTimer(60, function () use (&$loop, &$runTask)
+        {
             $loop->addTimer(60 - time() % 60, $runTask);
         });
 

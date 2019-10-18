@@ -7,7 +7,7 @@ use SupAgent\Library\Version;
 class TaskBase extends Task
 {
     const MAX_MEM_SIZE = 52428800;
-    const MAX_RUN_TIME = 86400;
+    const MAX_RUN_TIME = 3600;
 
     protected function checkBeforeNext(Version &$version, $start_time)
     {

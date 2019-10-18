@@ -23,7 +23,7 @@ class Command extends ProcessAbstract
     public $create_time;
 
     const PROGRAM_PREFIX = '_supervisor_command_';
-    const LOG_SIZE = 50;
+    const LOG_SIZE = 10;
 
     public function initialize()
     {
@@ -86,7 +86,11 @@ class Command extends ProcessAbstract
             /** @var Command $command */
             foreach ($commands as $command)
             {
-                @unlink($command->getLogFile());
+                if (is_file($command->getLogFile()))
+                {
+                    @unlink($command->getLogFile());
+                }
+
                 $command->delete();
             }
         }
