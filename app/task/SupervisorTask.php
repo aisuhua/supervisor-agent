@@ -118,7 +118,7 @@ class SupervisorTask extends TaskBase
         }
 
         // 删除进程配置
-        $supervisor->removeProcess($process->getPathConf(), $process->program);
+        $supervisor->removeProcess($process::getPathConf(), $process->program);
 
         // 清理进程日志
         $process->truncate();
